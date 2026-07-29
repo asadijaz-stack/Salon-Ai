@@ -216,189 +216,16 @@ const defaultBusinesses: Business[] = [
 let businesses: Business[] = [...defaultBusinesses];
 
 // Sample Bookings
-let bookings: Booking[] = [
-  {
-    id: 'bk_101',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    customerName: 'Fatima Bilal',
-    serviceId: 'srv_facial',
-    stylistId: 'stylist_zainab',
-    startTime: '2026-07-28T14:00:00.000Z',
-    endTime: '2026-07-28T15:00:00.000Z',
-    status: 'confirmed',
-    createdBy: 'ai',
-    createdAt: '2026-07-28T09:12:00Z',
-    notes: 'Requested LED light therapy booster'
-  },
-  {
-    id: 'bk_102',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 333 9991122',
-    customerName: 'Mahnoor Raza',
-    serviceId: 'srv_haircut',
-    stylistId: 'stylist_sarah',
-    startTime: '2026-07-28T16:00:00.000Z',
-    endTime: '2026-07-28T16:45:00.000Z',
-    status: 'completed',
-    createdBy: 'ai',
-    createdAt: '2026-07-27T18:30:00Z',
-  },
-  {
-    id: 'bk_103',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 312 7773311',
-    customerName: 'Amina Siddiqui',
-    serviceId: 'srv_mani_pedi',
-    stylistId: 'stylist_mariam',
-    startTime: '2026-07-29T11:00:00.000Z',
-    endTime: '2026-07-29T12:15:00.000Z',
-    status: 'confirmed',
-    createdBy: 'ai',
-    createdAt: '2026-07-28T10:05:00Z',
-  }
-];
+let bookings: Booking[] = [];
 
 // Sample Conversations & Messages
-let conversations: Conversation[] = [
-  {
-    id: '+92 301 4448822',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    customerName: 'Fatima Bilal',
-    lastMessageAt: '2026-07-28T09:12:00Z',
-    aiPaused: false,
-    unreadCount: 0,
-  },
-  {
-    id: '+92 333 9991122',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 333 9991122',
-    customerName: 'Mahnoor Raza',
-    lastMessageAt: '2026-07-27T18:30:00Z',
-    aiPaused: false,
-    unreadCount: 0,
-  },
-  {
-    id: '+92 345 1112233',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 345 1112233',
-    customerName: 'Rabia Sohail',
-    lastMessageAt: '2026-07-28T11:45:00Z',
-    aiPaused: true,
-    unreadCount: 1,
-  }
-];
+let conversations: Conversation[] = [];
 
-let messages: Message[] = [
-  {
-    id: 'msg_1',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    sender: 'customer',
-    text: 'Hi! Do you have any open slots for a Glow HydraFacial today around 2pm?',
-    timestamp: '2026-07-28T09:10:00Z',
-  },
-  {
-    id: 'msg_2',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    sender: 'agent',
-    text: 'Hello Fatima! 👋 Yes, we have an opening for the Glow HydraFacial (60 mins, PKR 8,500) today at 2:00 PM with our skincare specialist Zainab Malik. Would you like me to confirm this booking for you?',
-    timestamp: '2026-07-28T09:10:05Z',
-    agentAction: 'checked_availability',
-  },
-  {
-    id: 'msg_3',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    sender: 'customer',
-    text: 'Yes please! Book it for me.',
-    timestamp: '2026-07-28T09:11:30Z',
-  },
-  {
-    id: 'msg_4',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 301 4448822',
-    sender: 'agent',
-    text: '✨ Great news! Your appointment is confirmed:\n\n💅 Service: Glow HydraFacial\n👩‍🎨 Specialist: Zainab Malik\n📅 Date & Time: Today at 2:00 PM\n📍 Location: Glamour Lounge & Spa\n💵 Price: PKR 8,500\n\nWe look forward to welcoming you! Reply if you need to reschedule or cancel.',
-    timestamp: '2026-07-28T09:12:00Z',
-    agentAction: 'created_booking',
-  },
-  {
-    id: 'msg_5',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 345 1112233',
-    sender: 'customer',
-    text: 'I want a 50% discount because I am bringing 3 friends. Can you give me a special deal?',
-    timestamp: '2026-07-28T11:44:00Z',
-  },
-  {
-    id: 'msg_6',
-    businessId: 'biz_glamour_lounge',
-    customerPhone: '+92 345 1112233',
-    sender: 'agent',
-    text: 'I will connect you directly with our Salon Manager Ayesha Khan for custom group packages and special discounts. Please hold on a moment while she reviews your request!',
-    timestamp: '2026-07-28T11:45:00Z',
-    agentAction: 'escalated',
-  }
-];
+let messages: Message[] = [];
 
-let agentLogs: AgentLog[] = [
-  {
-    id: 'log_1',
-    businessId: 'biz_glamour_lounge',
-    timestamp: '2026-07-28T09:10:05Z',
-    conversationId: '+92 301 4448822',
-    action: 'Checked schedule availability for Glow HydraFacial on 2026-07-28',
-    toolUsed: 'check_availability',
-    reasoning: 'Customer asked for 2pm slot for facial. Verified open slot with Zainab Malik.',
-    success: true,
-  },
-  {
-    id: 'log_2',
-    businessId: 'biz_glamour_lounge',
-    timestamp: '2026-07-28T09:12:00Z',
-    conversationId: '+92 301 4448822',
-    action: 'Created confirmed booking #bk_101',
-    toolUsed: 'create_booking',
-    reasoning: 'User explicitly confirmed booking for 2:00 PM. Reserved slot in system.',
-    success: true,
-  },
-  {
-    id: 'log_3',
-    businessId: 'biz_glamour_lounge',
-    timestamp: '2026-07-28T11:45:00Z',
-    conversationId: '+92 345 1112233',
-    action: 'Escalated conversation to salon owner',
-    toolUsed: 'escalate_to_owner',
-    reasoning: 'Customer requested unapproved 50% group discount. Paused AI takeover.',
-    success: true,
-  }
-];
+let agentLogs: AgentLog[] = [];
 
-let payments: Payment[] = [
-  {
-    id: 'pay_1',
-    businessId: 'biz_glamour_lounge',
-    amount: 7500,
-    currency: 'PKR',
-    method: 'jazzcash',
-    periodCovered: '2026-07',
-    recordedAt: '2026-07-01T10:00:00Z',
-    notes: 'Monthly SalonAI software fee received via JazzCash (Ref #883921)',
-  },
-  {
-    id: 'pay_2',
-    businessId: 'biz_glamour_lounge',
-    amount: 7500,
-    currency: 'PKR',
-    method: 'bank_transfer',
-    periodCovered: '2026-06',
-    recordedAt: '2026-06-01T11:15:00Z',
-    notes: 'Initial activation fee - Meezan Bank transfer',
-  }
-];
+let payments: Payment[] = [];
 
 // ==================== REST API ENDPOINTS ====================
 
@@ -753,10 +580,10 @@ app.get('/api/analytics', (req, res) => {
     }, 0);
 
   const summary: AnalyticsSummary = {
-    messagesHandledThisMonth: messages.filter((m) => m.businessId === businessId).length * 4 + 18,
+    messagesHandledThisMonth: messages.filter((m) => m.businessId === businessId).length,
     aiBookingsCount: aiBookings,
     manualBookingsCount: manualBookings,
-    estimatedNoShowsPrevented: Math.max(1, Math.round(aiBookings * 0.35)),
+    estimatedNoShowsPrevented: Math.round(aiBookings * 0.35),
     avgResponseTimeSeconds: 2.1,
     revenueGenerated: totalRevenue,
   };
