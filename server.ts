@@ -984,10 +984,23 @@ function executeTool(
   return { result: { success: true }, actionName: 'ai_tool_call' };
 }
 
-// WhatsApp Simulation Endpoint (Receives customer message & calls Gemini with tool use)
-app.post('/api/whatsapp/simulate', async (req, res) => {
-  const { businessId, customerPhone, customerName, text } = req.body;
-
+// Standardized Inbound WhatsApp AI Message Processing Engine
+async function handleIncomingMessage({
+  businessId,
+  customerPhone,
+  customerName,
+  text,
+}: {
+  businessId?: string;
+  customerPhone?: string;
+  customerName?: string;
+  text?: string;
+}): Promise<{
+  replyText: string;
+  agentAction: string;
+  aiPaused?: boolean;
+  isTemplate?: boolean;
+}> {
   const currentBizId = businessId || businesses[0].id;
   const biz = businesses.find((b) => b.id === currentBizId) || businesses[0];
   const phone = customerPhone || '+92 300 9998877';
@@ -1029,11 +1042,11 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
       success: false,
     });
 
-    return res.json({
+    return {
       replyText: rateLimitReply,
       agentAction: 'rate_limited',
       aiPaused: false,
-    });
+    };
   }
 
   const now = new Date().toISOString();
@@ -1084,11 +1097,11 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
 
   // Check if owner took over
   if (conv.aiPaused) {
-    return res.json({
+    return {
       replyText: "[AI is currently paused for this conversation because the salon owner took over. The message has been routed to the owner's dashboard inbox.]",
       aiPaused: true,
       agentAction: 'owner_takeover_active',
-    });
+    };
   }
 
   // If 24-hour window was expired or new conversation, send approved WhatsApp Message Template
@@ -1117,12 +1130,12 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
       success: true,
     });
 
-    return res.json({
+    return {
       replyText: templateReplyText,
       agentAction: 'sent_template_reengagement',
       aiPaused: conv.aiPaused,
       isTemplate: true,
-    });
+    };
   }
 
   // Process with Gemini API
@@ -1142,10 +1155,10 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
     };
     messages.push(agentMsg);
 
-    return res.json({
+    return {
       replyText: simulatedReply,
       agentAction: 'checked_availability',
-    });
+    };
   }
 
   try {
@@ -1185,9 +1198,9 @@ Your primary duties:
       parts: [{ text: m.text }],
     }));
 
-    // Call Gemini with tool definitions and COST CONTROLS (maxOutputTokens: 350)
+    // Call Gemini with tool definitions and COST CONTROLS (gemini-2.5-flash-lite, maxOutputTokens: 350)
     let response = await aiClient.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash-lite',
       contents,
       config: {
         systemInstruction,
@@ -1246,7 +1259,7 @@ Your primary duties:
       ];
 
       response = await aiClient.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-2.5-flash-lite',
         contents: followUpContents,
         config: {
           systemInstruction,
@@ -1272,11 +1285,11 @@ Your primary duties:
     };
     messages.push(agentMsg);
 
-    res.json({
+    return {
       replyText,
       agentAction: lastAction,
       aiPaused: conv.aiPaused,
-    });
+    };
   } catch (error: any) {
     console.error('Gemini Agent Error:', error);
     const fallbackReply = `Hello! Thank you for messaging ${biz.name}. I've logged your request for our salon team. Do you have a preferred time in mind?`;
@@ -1292,11 +1305,17 @@ Your primary duties:
     };
     messages.push(agentMsg);
 
-    res.json({
+    return {
       replyText: fallbackReply,
       agentAction: 'replied_fallback',
-    });
+    };
   }
+}
+
+// WhatsApp Simulation Endpoint (Receives customer message & calls Gemini with tool use)
+app.post('/api/whatsapp/simulate', async (req, res) => {
+  const result = await handleIncomingMessage(req.body);
+  res.json(result);
 });
 
 // Meta WhatsApp Webhook Handshake Verification (GET)
@@ -1326,8 +1345,47 @@ app.post('/api/whatsapp/webhook', (req, res) => {
   const body = req.body;
   console.log('Incoming Meta WhatsApp Webhook Payload:', JSON.stringify(body, null, 2));
 
-  // Acknowledge Meta immediately with 200 OK
+  // Acknowledge Meta immediately with 200 OK so Meta doesn't retry
   res.status(200).send('EVENT_RECEIVED');
+
+  // Parse Meta WhatsApp Webhook Payload asynchronously
+  if (body && body.object === 'whatsapp_business_account' && Array.isArray(body.entry)) {
+    for (const entry of body.entry) {
+      if (Array.isArray(entry.changes)) {
+        for (const change of entry.changes) {
+          const value = change.value;
+          if (value && Array.isArray(value.messages)) {
+            const metaPhoneNumberId = value.metadata?.phone_number_id;
+            // Match business tenant by whatsappPhoneNumberId or fallback to first business
+            const matchedBiz =
+              businesses.find((b) => b.whatsappPhoneNumberId === metaPhoneNumberId) || businesses[0];
+
+            for (const message of value.messages) {
+              // Only process inbound customer text messages (ignore status updates like 'delivered'/'read')
+              if (message.type === 'text' && message.text?.body) {
+                const rawFrom = message.from || '';
+                const customerPhone = rawFrom ? (rawFrom.startsWith('+') ? rawFrom : `+${rawFrom}`) : '+92 300 9998877';
+                const customerName = value.contacts?.[0]?.profile?.name || 'Customer';
+                const text = message.text.body;
+
+                console.log(`Webhook triggering AI for Business [${matchedBiz.id}] from Customer [${customerPhone}] (${customerName})`);
+
+                // Execute extracted handleIncomingMessage directly
+                handleIncomingMessage({
+                  businessId: matchedBiz.id,
+                  customerPhone,
+                  customerName,
+                  text,
+                }).catch((err) => {
+                  console.error('Error executing handleIncomingMessage from webhook:', err);
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 });
 
 // ==================== VITE DEVELOPMENT / PRODUCTION SERVING ====================
