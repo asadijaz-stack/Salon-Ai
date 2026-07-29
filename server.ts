@@ -766,120 +766,93 @@ app.get('/api/analytics', (req, res) => {
 
 // ==================== GEMINI AI AGENT & FUNCTION CALLING ENGINE ====================
 
-// Tool declarations for Gemini
+// Tool declarations for Gemini using parametersJsonSchema as requested
 const checkAvailabilityTool: FunctionDeclaration = {
-  name: 'check_availability',
+  name: 'checkAvailability',
   description: 'Checks salon availability and open time slots for a given service and date.',
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: 'object',
     properties: {
-      serviceId: {
-        type: Type.STRING,
-        description: 'The service ID or service name being requested.',
-      },
-      date: {
-        type: Type.STRING,
-        description: 'The requested date or time horizon (e.g. "2026-07-28", "today", "tomorrow", "Friday").',
-      },
-      stylistId: {
-        type: Type.STRING,
-        description: 'Optional stylist ID or stylist name preferred by the customer.',
-      },
+      serviceId: { type: 'string', description: 'Service ID or name' },
+      date: { type: 'string', description: 'Date in YYYY-MM-DD or relative terms like "today", "tomorrow"' },
     },
     required: ['serviceId', 'date'],
   },
 };
 
 const createBookingTool: FunctionDeclaration = {
-  name: 'create_booking',
+  name: 'createBooking',
   description: 'Creates a confirmed salon booking appointment for a customer.',
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: 'object',
     properties: {
-      customerPhone: {
-        type: Type.STRING,
-        description: 'Customer WhatsApp phone number.',
-      },
-      customerName: {
-        type: Type.STRING,
-        description: 'Customer full or first name.',
-      },
-      serviceId: {
-        type: Type.STRING,
-        description: 'Selected service ID or name.',
-      },
-      startTime: {
-        type: Type.STRING,
-        description: 'Appointment start time in ISO format or clear timestamp e.g., "2026-07-28T15:00:00".',
-      },
-      stylistId: {
-        type: Type.STRING,
-        description: 'Optional assigned stylist ID or name.',
-      },
-      notes: {
-        type: Type.STRING,
-        description: 'Optional special requests or notes.',
-      },
+      serviceId: { type: 'string', description: 'Service ID or name' },
+      stylistId: { type: 'string', description: 'Optional stylist ID or name' },
+      customerName: { type: 'string', description: 'Customer full name' },
+      startTime: { type: 'string', description: 'Appointment start time in ISO format or timestamp' },
     },
-    required: ['customerPhone', 'customerName', 'serviceId', 'startTime'],
+    required: ['serviceId', 'customerName', 'startTime'],
   },
 };
 
 const rescheduleBookingTool: FunctionDeclaration = {
-  name: 'reschedule_booking',
+  name: 'rescheduleBooking',
   description: 'Reschedules an existing booking to a new date and time.',
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: 'object',
     properties: {
-      bookingId: {
-        type: Type.STRING,
-        description: 'The ID of the existing booking to reschedule.',
-      },
-      newStartTime: {
-        type: Type.STRING,
-        description: 'New requested start time in ISO format e.g. "2026-07-29T16:00:00".',
-      },
-      newStylistId: {
-        type: Type.STRING,
-        description: 'Optional new stylist ID.',
-      },
+      bookingId: { type: 'string', description: 'The ID of the existing booking' },
+      newStartTime: { type: 'string', description: 'New requested start time in ISO format' },
     },
     required: ['bookingId', 'newStartTime'],
   },
 };
 
 const cancelBookingTool: FunctionDeclaration = {
-  name: 'cancel_booking',
+  name: 'cancelBooking',
   description: 'Cancels an existing salon booking.',
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: 'object',
     properties: {
-      bookingId: {
-        type: Type.STRING,
-        description: 'The ID of the booking to cancel.',
-      },
-      reason: {
-        type: Type.STRING,
-        description: 'Reason for cancellation.',
-      },
+      bookingId: { type: 'string', description: 'The ID of the booking to cancel' },
+      reason: { type: 'string', description: 'Reason for cancellation' },
     },
     required: ['bookingId'],
   },
 };
 
 const escalateToOwnerTool: FunctionDeclaration = {
-  name: 'escalate_to_owner',
+  name: 'escalateToOwner',
   description: 'Escalates the conversation to the human salon owner when custom discounts, complaints, or complex requests occur.',
-  parameters: {
-    type: Type.OBJECT,
+  parametersJsonSchema: {
+    type: 'object',
     properties: {
-      reason: {
-        type: Type.STRING,
-        description: 'Detailed reason for handoff / escalation.',
-      },
+      reason: { type: 'string', description: 'Detailed reason for escalation' },
     },
     required: ['reason'],
   },
+};
+
+// Also define snake_case aliases for robust matching
+const checkAvailabilitySnakeTool: FunctionDeclaration = {
+  ...checkAvailabilityTool,
+  name: 'check_availability',
+};
+const createBookingSnakeTool: FunctionDeclaration = {
+  ...createBookingTool,
+  name: 'create_booking',
+};
+const rescheduleBookingSnakeTool: FunctionDeclaration = {
+  ...rescheduleBookingTool,
+  name: 'reschedule_booking',
+};
+const cancelBookingSnakeTool: FunctionDeclaration = {
+  ...cancelBookingTool,
+  name: 'cancel_booking',
+};
+const escalateToOwnerSnakeTool: FunctionDeclaration = {
+  ...escalateToOwnerTool,
+  name: 'escalate_to_owner',
 };
 
 // Helper function to execute tools locally against in-memory DB
@@ -887,15 +860,23 @@ function executeTool(
   biz: Business,
   customerPhone: string,
   customerName: string,
-  name: string,
+  rawToolName: string,
   args: any
 ): { result: any; actionName: string } {
-  console.log(`Executing tool [${name}] with args:`, args);
+  console.log(`Executing tool [${rawToolName}] with args:`, args);
+
+  // Normalize tool names (supports both camelCase and snake_case)
+  const name = rawToolName === 'checkAvailability' ? 'check_availability'
+    : rawToolName === 'createBooking' ? 'create_booking'
+    : rawToolName === 'rescheduleBooking' ? 'reschedule_booking'
+    : rawToolName === 'cancelBooking' ? 'cancel_booking'
+    : rawToolName === 'escalateToOwner' ? 'escalate_to_owner'
+    : rawToolName;
 
   if (name === 'check_availability') {
-    const serviceName = args.serviceId;
+    const serviceName = args.serviceId || 'Service';
     const matchedService = biz.services.find(
-      (s) => s.id === args.serviceId || s.name.toLowerCase().includes(serviceName.toLowerCase())
+      (s) => s.id === args.serviceId || s.name.toLowerCase().includes((args.serviceId || '').toLowerCase())
     ) || biz.services[0];
 
     const openSlots = ['10:00 AM', '11:30 AM', '02:00 PM', '04:00 PM', '06:00 PM'];
@@ -921,7 +902,7 @@ function executeTool(
       (st) => st.id === args.stylistId || st.name.toLowerCase().includes((args.stylistId || '').toLowerCase())
     ) || biz.stylists[0];
 
-    const start = args.startTime.includes('T')
+    const start = args.startTime && args.startTime.includes('T')
       ? new Date(args.startTime)
       : new Date(Date.now() + 2 * 3600 * 1000);
 
@@ -1057,6 +1038,22 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
 
   const now = new Date().toISOString();
 
+  // 3. 24-Hour Customer Service Window Check
+  let conv = conversations.find((c) => c.businessId === currentBizId && c.customerPhone === phone);
+  const previousLastMessageAt = conv ? conv.lastMessageAt : null;
+
+  let isWindowOpen = true;
+  if (previousLastMessageAt) {
+    const elapsedMs = Date.now() - new Date(previousLastMessageAt).getTime();
+    const elapsedHours = elapsedMs / (1000 * 60 * 60);
+    if (elapsedHours > 24) {
+      isWindowOpen = false;
+    }
+  } else {
+    // New conversation with no prior record
+    isWindowOpen = false;
+  }
+
   // Save customer message
   const custMsg: Message = {
     id: `msg_${Date.now()}`,
@@ -1068,8 +1065,7 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
   };
   messages.push(custMsg);
 
-  // Update conversation record
-  let conv = conversations.find((c) => c.businessId === currentBizId && c.customerPhone === phone);
+  // Update conversation record timestamp
   if (!conv) {
     conv = {
       id: phone,
@@ -1092,6 +1088,40 @@ app.post('/api/whatsapp/simulate', async (req, res) => {
       replyText: "[AI is currently paused for this conversation because the salon owner took over. The message has been routed to the owner's dashboard inbox.]",
       aiPaused: true,
       agentAction: 'owner_takeover_active',
+    });
+  }
+
+  // If 24-hour window was expired or new conversation, send approved WhatsApp Message Template
+  if (!isWindowOpen) {
+    const templateReplyText = `We're here to help at ${biz.name}! Reply to this message and we'll get right back to you.`;
+
+    const templateMsg: Message = {
+      id: `msg_${Date.now() + 1}`,
+      businessId: currentBizId,
+      customerPhone: phone,
+      sender: 'agent',
+      text: templateReplyText,
+      timestamp: new Date().toISOString(),
+      agentAction: 'sent_template_reengagement',
+    };
+    messages.push(templateMsg);
+
+    agentLogs.unshift({
+      id: `log_${Date.now()}`,
+      businessId: currentBizId,
+      timestamp: new Date().toISOString(),
+      conversationId: phone,
+      action: '24H_WINDOW_EXPIRED_TEMPLATE_SENT',
+      toolUsed: 'whatsapp_graph_api',
+      reasoning: `24-hour customer service window was closed or uninitiated. Sent approved Meta message template instead of calling Gemini.`,
+      success: true,
+    });
+
+    return res.json({
+      replyText: templateReplyText,
+      agentAction: 'sent_template_reengagement',
+      aiPaused: conv.aiPaused,
+      isTemplate: true,
     });
   }
 
