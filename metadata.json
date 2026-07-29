@@ -1,0 +1,6 @@
+{
+  "name": "SalonAI - WhatsApp AI Receptionist",
+  "description": "AI-native WhatsApp booking receptionist and multi-tenant salon management platform powered by Gemini AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Deny-by-Default Fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Security Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBusinessOwner(businessId) {
+      return isEmailVerified() && (
+        resource == null
+          ? request.resource.data.ownerUid == request.auth.uid
+          : resource.data.ownerUid == request.auth.uid
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-+]+$');
+    }
+
+    // Business Tenant Document Validation
+    function isValidBusiness(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.ownerName is string && data.ownerName.size() > 0 && data.ownerName.size() <= 100
+        && data.ownerEmail is string && data.ownerEmail.size() <= 150
+        && data.ownerUid is string && data.ownerUid == request.auth.uid
+        && data.phone is string && data.phone.size() <= 30
+        && data.subscriptionPrice is number && data.subscriptionPrice >= 0
+        && data.subscriptionStatus in ['active', 'trial', 'past_due', 'cancelled']
+        && data.subscriptionCurrency in ['PKR', 'USD'];
+    }
+
+    // Service Validation
+    function isValidService(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.category is string && data.category.size() <= 50
+        && data.durationMinutes is number && data.durationMinutes > 0 && data.durationMinutes <= 1440
+        && data.price is number && data.price >= 0;
+    }
+
+    // Booking Validation
+    function isValidBooking(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.businessId is string && data.businessId.size() <= 128
+        && data.customerPhone is string && data.customerPhone.size() <= 30
+        && data.customerName is string && data.customerName.size() <= 100
+        && data.serviceId is string && data.serviceId.size() <= 128
+        && data.startTime is string && data.startTime.size() <= 64
+        && data.status in ['confirmed', 'completed', 'cancelled', 'no_show']
+        && data.createdBy in ['ai', 'owner'];
+    }
+
+    // MATCH: /businesses/{businessId}
+    match /businesses/{businessId} {
+      allow get, list: if isSignedIn() && (resource == null || resource.data.ownerUid == request.auth.uid);
+      allow create: if isEmailVerified() && isValidId(businessId) && isValidBusiness(request.resource.data);
+      allow update: if isBusinessOwner(businessId) && isValidBusiness(request.resource.data)
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isBusinessOwner(businessId);
+
+      // MATCH: /businesses/{businessId}/services/{serviceId}
+      match /services/{serviceId} {
+        allow read: if isBusinessOwner(businessId);
+        allow create, update: if isBusinessOwner(businessId) && isValidId(serviceId) && isValidService(request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      // MATCH: /businesses/{businessId}/stylists/{stylistId}
+      match /stylists/{stylistId} {
+        allow read, write: if isBusinessOwner(businessId) && isValidId(stylistId);
+      }
+
+      // MATCH: /businesses/{businessId}/bookings/{bookingId}
+      match /bookings/{bookingId} {
+        allow read: if isBusinessOwner(businessId);
+        allow create: if isBusinessOwner(businessId) && isValidId(bookingId) && isValidBooking(request.resource.data);
+        allow update: if isBusinessOwner(businessId) && isValidBooking(request.resource.data);
+        allow delete: if isBusinessOwner(businessId);
+      }
+
+      // MATCH: /businesses/{businessId}/conversations/{customerPhone}
+      // Strictly protected: No public unauthenticated writes.
+      // Cloud Functions (Admin SDK) bypass rules. Authenticated owner can read and update.
+      match /conversations/{customerPhone} {
+        allow read: if isBusinessOwner(businessId);
+        allow create, update: if isBusinessOwner(businessId);
+        allow delete: if isBusinessOwner(businessId);
+
+        match /messages/{messageId} {
+          allow read: if isBusinessOwner(businessId);
+          // Only authenticated owner can write manually from dashboard; public direct writes blocked
+          allow create, update: if isBusinessOwner(businessId);
+          allow delete: if isBusinessOwner(businessId);
+        }
+      }
+
+      // MATCH: /businesses/{businessId}/agentLogs/{logId}
+      match /agentLogs/{logId} {
+        allow read: if isBusinessOwner(businessId);
+        allow write: if false; // System / Cloud Function logs only via Admin SDK
+      }
+
+      // MATCH: /businesses/{businessId}/rateLimits/{limitId}
+      match /rateLimits/{limitId} {
+        allow read: if isBusinessOwner(businessId);
+        allow write: if false; // System / Cloud Function only
+      }
+    }
+  }
+}

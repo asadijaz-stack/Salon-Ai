@@ -1,0 +1,147 @@
+{
+  "entities": {
+    "Business": {
+      "title": "Business",
+      "description": "Multi-tenant salon business entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "ownerName": { "type": "string", "maxLength": 100 },
+        "ownerEmail": { "type": "string", "format": "email", "maxLength": 150 },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "whatsappPhoneNumberId": { "type": "string", "maxLength": 100 },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "trial", "past_due", "cancelled"] },
+        "subscriptionPrice": { "type": "number" },
+        "subscriptionCurrency": { "type": "string", "enum": ["PKR", "USD"] },
+        "dailyAiMessageCount": { "type": "number" },
+        "aiPaused": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "ownerName", "ownerEmail", "phone", "subscriptionStatus", "subscriptionPrice", "subscriptionCurrency"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Salon service offered to customers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "maxLength": 50 },
+        "durationMinutes": { "type": "number" },
+        "price": { "type": "number" },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "name", "category", "durationMinutes", "price"]
+    },
+    "Stylist": {
+      "title": "Stylist",
+      "description": "Salon stylist or specialist staff",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "specialties": { "type": "array" },
+        "workingHours": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "name", "workingHours"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Appointment booking created by AI or owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "businessId": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "serviceId": { "type": "string", "maxLength": 128 },
+        "stylistId": { "type": "string", "maxLength": 128 },
+        "startTime": { "type": "string", "maxLength": 64 },
+        "endTime": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["confirmed", "completed", "cancelled", "no_show"] },
+        "createdBy": { "type": "string", "enum": ["ai", "owner"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "notes": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "businessId", "customerPhone", "customerName", "serviceId", "startTime", "endTime", "status", "createdBy"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "WhatsApp customer chat thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "businessId": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "lastMessageAt": { "type": "string", "maxLength": 64 },
+        "aiPaused": { "type": "boolean" },
+        "unreadCount": { "type": "number" }
+      },
+      "required": ["id", "businessId", "customerPhone", "lastMessageAt", "aiPaused"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message in conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "businessId": { "type": "string", "maxLength": 128 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "sender": { "type": "string", "enum": ["customer", "agent", "owner"] },
+        "text": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "agentAction": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["id", "businessId", "customerPhone", "sender", "text", "timestamp"]
+    },
+    "AgentLog": {
+      "title": "AgentLog",
+      "description": "Audit and telemetry log entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "businessId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "conversationId": { "type": "string", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 200 },
+        "toolUsed": { "type": "string", "maxLength": 100 },
+        "reasoning": { "type": "string", "maxLength": 1000 },
+        "success": { "type": "boolean" }
+      },
+      "required": ["id", "businessId", "timestamp", "action", "reasoning", "success"]
+    }
+  },
+  "firestore": {
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Salon tenant configuration and subscription profile"
+    },
+    "/businesses/{businessId}/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Services offered by salon"
+    },
+    "/businesses/{businessId}/stylists/{stylistId}": {
+      "schema": "Stylist",
+      "description": "Stylists and staff"
+    },
+    "/businesses/{businessId}/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Confirmed and past appointments"
+    },
+    "/businesses/{businessId}/conversations/{customerPhone}": {
+      "schema": "Conversation",
+      "description": "Customer message threads"
+    },
+    "/businesses/{businessId}/conversations/{customerPhone}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Individual messages in customer thread"
+    },
+    "/businesses/{businessId}/agentLogs/{logId}": {
+      "schema": "AgentLog",
+      "description": "Audit telemetry log stream"
+    }
+  }
+}
