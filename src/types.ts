@@ -35,16 +35,19 @@ export interface Business {
   id: string;
   name: string;
   ownerName: string;
+  ownerUid: string;
   ownerEmail: string;
   phone: string;
   whatsappPhoneNumberId: string;
   hours: WeeklyHours;
   services: Service[];
   stylists: Stylist[];
-  subscriptionStatus: 'trial' | 'active' | 'overdue' | 'cancelled';
+  subscriptionStatus: 'pending' | 'trial' | 'active' | 'overdue' | 'cancelled';
   subscriptionPrice: number;
   subscriptionCurrency: 'PKR' | 'USD';
   createdAt: string;
+  requestedPlan?: 'trial' | 'paid';
+  paymentProof?: string;
 }
 
 export type BookingStatus = 'confirmed' | 'completed' | 'cancelled' | 'no_show';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Send,
@@ -25,11 +25,33 @@ interface LiveConversationsProps {
 export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState('template_1');
   const [messages, setMessages] = useState<Message[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [inputText, setInputText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastPhoneRef = useRef<string | null>(null);
+
+  // Smart auto-scroll: Snap to bottom on chat load, but don't force scroll if reading history
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      const isNewConv = lastPhoneRef.current !== selectedPhone;
+
+      if (isNewConv || isNearBottom) {
+        container.scrollTop = scrollHeight;
+      }
+      
+      if (messages.length > 0) {
+        lastPhoneRef.current = selectedPhone;
+      }
+    }
+  }, [messages, selectedPhone]);
 
   // Fetch conversations
   const fetchConversations = async () => {
@@ -112,11 +134,30 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
         body: JSON.stringify({ text: inputText }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setMessages((prev) => [...prev, data]);
         setInputText('');
-        fetchMessages(selectedPhone);
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendTemplate = async () => {
+    if (!activeConv || !selectedTemplate) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/conversations/${activeConv.customerPhone}/send?businessId=${business.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTemplate: true, templateId: selectedTemplate }),
+      });
+      const data = await res.json();
+      setMessages((prev) => [...prev, data]);
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -131,10 +172,10 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
   const customerBookings = bookings.filter((b) => b.customerPhone === selectedPhone);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="bg-white border border-[#EDEDEB] rounded-2xl shadow-xs overflow-hidden min-h-[680px] grid grid-cols-1 lg:grid-cols-12 text-[#37352F]">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:h-[calc(100vh-70px)]">
+      <div className="bg-white border border-[#EDEDEB] rounded-2xl shadow-xs overflow-hidden flex-1 grid grid-cols-1 lg:grid-cols-12 text-[#37352F] min-h-[600px] lg:min-h-0">
         {/* Left Panel: Conversation List (4 cols) */}
-        <div className="lg:col-span-4 border-r border-[#EDEDEB] flex flex-col bg-[#F7F6F3]">
+        <div className="lg:col-span-4 border-r border-[#EDEDEB] flex flex-col bg-[#F7F6F3] h-full overflow-hidden">
           <div className="p-4 border-b border-[#EDEDEB] bg-[#F7F6F3]">
             <h2 className="text-base font-bold text-[#37352F] flex items-center justify-between">
               <span>WhatsApp Inbox</span>
@@ -207,11 +248,15 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
         </div>
 
         {/* Middle Panel: Chat Message Thread (5 cols) */}
-        <div className="lg:col-span-5 flex flex-col bg-[#FCFCFB] relative border-r border-[#EDEDEB]">
+        <div className="lg:col-span-5 flex flex-col bg-[#FCFCFB] relative border-r border-[#EDEDEB] h-full overflow-hidden">
           {/* Chat Header */}
           {activeConv ? (
             <>
-              <div className="p-3.5 bg-white border-b border-[#EDEDEB] flex items-center justify-between z-10">
+              {(() => {
+                const isWindowClosed = (Date.now() - new Date(activeConv.lastMessageAt).getTime()) > 24 * 60 * 60 * 1000;
+                return (
+                  <>
+                    <div className="p-3.5 bg-white border-b border-[#EDEDEB] flex items-center justify-between z-10">
                 <div className="flex items-center space-x-3">
                   <div className="w-9 h-9 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-800 font-bold text-sm">
                     {activeConv.customerName.charAt(0)}
@@ -264,7 +309,7 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
               )}
 
               {/* Message Thread Area */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#FCFCFB] min-h-[420px]">
+              <div ref={scrollContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#FCFCFB]">
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-400 text-xs py-12">
                     No messages in this conversation yet.
@@ -335,26 +380,58 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
               </div>
 
               {/* Chat Input Bar */}
-              <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#EDEDEB] flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder={
-                    activeConv.aiPaused
-                      ? 'Type manual reply as Salon Owner...'
-                      : 'Type override reply (will send as Owner)...'
-                  }
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  className="flex-1 bg-[#FCFCFB] text-[#37352F] text-sm px-4 py-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400 transition"
-                />
-                <button
-                  type="submit"
-                  disabled={loading || !inputText.trim()}
-                  className="bg-[#37352F] hover:bg-black disabled:opacity-50 text-white p-2.5 rounded-xl transition shadow-xs flex items-center justify-center shrink-0"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
+              {isWindowClosed ? (
+                <div className="p-3 bg-white border-t border-[#EDEDEB] flex flex-col space-y-2">
+                  <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>24-Hour Window Closed.</strong> Meta policy requires you to send a pre-approved template to re-engage this customer before you can type custom messages.
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={selectedTemplate}
+                      onChange={(e) => setSelectedTemplate(e.target.value)}
+                      className="flex-1 bg-[#FCFCFB] text-[#37352F] text-sm px-3 py-2 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400 transition"
+                    >
+                      <option value="template_1">"We're here to help! Reply to this message to continue..."</option>
+                      <option value="template_2">"Hi! Just a friendly reminder about your upcoming appointment."</option>
+                      <option value="template_3">"We miss you! Let us know if you'd like to book another visit."</option>
+                    </select>
+                    <button
+                      onClick={handleSendTemplate}
+                      disabled={loading}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center space-x-1 shrink-0"
+                    >
+                      <span>Send Template</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSendMessage} className="p-3 bg-white border-t border-[#EDEDEB] flex items-center space-x-2">
+                  <input
+                    type="text"
+                    placeholder={
+                      activeConv.aiPaused
+                        ? 'Type manual reply as Salon Owner...'
+                        : 'Type override reply (will send as Owner)...'
+                    }
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    className="flex-1 bg-[#FCFCFB] text-[#37352F] text-sm px-4 py-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400 transition"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !inputText.trim()}
+                    className="bg-[#37352F] hover:bg-black disabled:opacity-50 text-white p-2.5 rounded-xl transition shadow-xs flex items-center justify-center shrink-0"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
+              )}
+                  </>
+                );
+              })()}
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-gray-400">
@@ -365,7 +442,7 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
         </div>
 
         {/* Right Panel: Customer Profile & Quick Booking Details (3 cols) */}
-        <div className="lg:col-span-3 p-4 bg-[#F7F6F3] flex flex-col justify-between border-t lg:border-t-0 border-[#EDEDEB]">
+        <div className="lg:col-span-3 p-4 bg-[#F7F6F3] flex flex-col justify-between border-t lg:border-t-0 border-[#EDEDEB] h-full overflow-y-auto">
           {activeConv ? (
             <div>
               <div className="text-center pb-4 border-b border-[#EDEDEB]">

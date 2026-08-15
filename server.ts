@@ -1,9 +1,14 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import {
   Business,
   Booking,
@@ -18,6 +23,53 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Initialize Firebase Admin
+let db: Firestore | null = null;
+try {
+  const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+    db = getFirestore();
+    console.log('Firebase Admin initialized successfully using serviceAccountKey.json');
+
+    // Auto-provision Super Admin Account
+    const adminEmail = process.env.SUPER_ADMIN_EMAIL;
+    const adminPassword = process.env.SUPER_ADMIN_PASSWORD;
+
+    if (adminEmail && adminPassword) {
+      getAuth().getUserByEmail(adminEmail)
+        .then(() => {
+          console.log(`[Auth] Super Admin account (${adminEmail}) already exists.`);
+        })
+        .catch(async (error) => {
+          if (error.code === 'auth/user-not-found') {
+            console.log(`[Auth] Creating Super Admin account (${adminEmail})...`);
+            try {
+              await getAuth().createUser({
+                email: adminEmail,
+                password: adminPassword,
+                emailVerified: true,
+              });
+              console.log('[Auth] Super Admin account created successfully!');
+            } catch (createErr) {
+              console.error('[Auth] Failed to create Super Admin account:', createErr);
+            }
+          }
+        });
+    } else {
+      console.warn('[Auth] SUPER_ADMIN_EMAIL or SUPER_ADMIN_PASSWORD missing in .env. Skipping admin auto-provisioning.');
+    }
+
+  } else {
+    console.warn('serviceAccountKey.json not found! Firestore calls will fail unless initialized otherwise.');
+  }
+} catch (error) {
+  console.error('Error initializing Firebase Admin:', error);
+}
+
 const app = express();
 
 // Express raw/JSON parsing with raw body capture for HMAC verification
@@ -26,6 +78,23 @@ app.use(express.json({
     req.rawBody = buf;
   }
 }));
+
+// Authentication Middleware
+const verifyToken = async (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Error verifying auth token:', error);
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  }
+};
 
 const PORT = 3000;
 
@@ -149,82 +218,30 @@ function isValidPhone(phone: string): boolean {
 
 // ==================== IN-MEMORY / PERSISTENT DATA STORE ====================
 // Seed data for SalonAI tenants
-const defaultBusinesses: Business[] = [
-  {
-    id: 'biz_glamour_lounge',
-    name: 'Glamour Lounge & Spa',
-    ownerName: 'Ayesha Khan',
-    ownerEmail: 'ayesha@glamourlounge.pk',
-    phone: '+92 300 8472910',
-    whatsappPhoneNumberId: 'phone_id_glamour_923008472910',
-    hours: {
-      mon: { open: '10:00', close: '20:00', closed: false },
-      tue: { open: '10:00', close: '20:00', closed: false },
-      wed: { open: '10:00', close: '20:00', closed: false },
-      thu: { open: '10:00', close: '20:00', closed: false },
-      fri: { open: '10:00', close: '20:00', closed: false },
-      sat: { open: '10:00', close: '21:00', closed: false },
-      sun: { open: '11:00', close: '18:00', closed: false },
-    },
-    services: [
-      { id: 'srv_haircut', name: 'Signature Haircut & Blowdry', category: 'Hair', durationMinutes: 45, price: 3500, description: 'Wash, precision haircut, and custom blowdry styling' },
-      { id: 'srv_facial', name: 'Glow HydraFacial', category: 'Skincare', durationMinutes: 60, price: 8500, description: 'Deep cleansing, exfoliation, hydration, and LED light therapy' },
-      { id: 'srv_mani_pedi', name: 'Deluxe Mani-Pedi Duo', category: 'Nails', durationMinutes: 75, price: 4500, description: 'Exfoliation scrub, massage, cuticle care, and gel polish' },
-      { id: 'srv_keratin', name: 'Keratin Smoothing Treatment', category: 'Hair', durationMinutes: 120, price: 18000, description: 'Frizz control, deep shine, and intense hair straightening' },
-      { id: 'srv_makeup', name: 'Party Glam Makeup', category: 'Makeup', durationMinutes: 60, price: 12000, description: 'Full coverage airbrush or HD glam with lash extensions' }
-    ],
-    stylists: [
-      { id: 'stylist_sarah', name: 'Sarah Ahmed', specialties: ['Signature Haircut', 'Keratin'], workingHours: '10:00 - 18:00' },
-      { id: 'stylist_zainab', name: 'Zainab Malik', specialties: ['Glow HydraFacial', 'Party Glam Makeup'], workingHours: '11:00 - 19:00' },
-      { id: 'stylist_mariam', name: 'Mariam Ali', specialties: ['Deluxe Mani-Pedi', 'Hair Styling'], workingHours: '10:00 - 20:00' }
-    ],
-    subscriptionStatus: 'active',
-    subscriptionPrice: 7500,
-    subscriptionCurrency: 'PKR',
-    createdAt: '2026-06-01T08:00:00Z',
-  },
-  {
-    id: 'biz_velvet_dha',
-    name: 'Velvet Beauty Studio',
-    ownerName: 'Sana Tariq',
-    ownerEmail: 'sana@velvetdha.pk',
-    phone: '+92 321 5551234',
-    whatsappPhoneNumberId: 'phone_id_velvet_923215551234',
-    hours: {
-      mon: { open: '11:00', close: '19:00', closed: false },
-      tue: { open: '11:00', close: '19:00', closed: false },
-      wed: { open: '11:00', close: '19:00', closed: false },
-      thu: { open: '11:00', close: '19:00', closed: false },
-      fri: { open: '11:00', close: '19:00', closed: false },
-      sat: { open: '10:00', close: '20:00', closed: false },
-      sun: { open: '00:00', close: '00:00', closed: true },
-    },
-    services: [
-      { id: 'v_srv_hair', name: 'Layered Cut & Highlights', category: 'Hair', durationMinutes: 90, price: 12000, description: 'Balayage or foils with custom cut' },
-      { id: 'v_srv_waxing', name: 'Full Body Waxing', category: 'Body', durationMinutes: 60, price: 5000, description: 'Gentle organic wax hair removal' }
-    ],
-    stylists: [
-      { id: 'v_stylist_fatima', name: 'Fatima Noor', specialties: ['Balayage', 'Styling'], workingHours: '11:00 - 19:00' }
-    ],
-    subscriptionStatus: 'trial',
-    subscriptionPrice: 25,
-    subscriptionCurrency: 'USD',
-    createdAt: '2026-07-15T10:00:00Z',
-  }
+const defaultHours = {
+  mon: { open: '10:00', close: '20:00', closed: false },
+  tue: { open: '10:00', close: '20:00', closed: false },
+  wed: { open: '10:00', close: '20:00', closed: false },
+  thu: { open: '10:00', close: '20:00', closed: false },
+  fri: { open: '10:00', close: '20:00', closed: false },
+  sat: { open: '10:00', close: '21:00', closed: false },
+  sun: { open: '11:00', close: '18:00', closed: false },
+};
+
+const defaultServices = [
+  { id: `srv_default`, name: 'Standard Service', category: 'General', durationMinutes: 45, price: 3000, description: 'Primary salon service' }
 ];
 
-let businesses: Business[] = [...defaultBusinesses];
+const defaultStylists = [
+  { id: `st_default`, name: 'Stylist', specialties: ['General Hair & Beauty'], workingHours: '10:00 - 19:00' }
+];
 
-// Sample Bookings
+// Removed in-memory arrays for main usage, but kept for fallback logic.
+let businesses: Business[] = [];
 let bookings: Booking[] = [];
-
-// Sample Conversations & Messages
 let conversations: Conversation[] = [];
-
 let messages: Message[] = [];
-
 let agentLogs: AgentLog[] = [];
-
 let payments: Payment[] = [];
 
 // ==================== REST API ENDPOINTS ====================
@@ -265,22 +282,46 @@ app.post('/api/auth/reset-password', (req, res) => {
 });
 
 // Get all businesses / active business
-app.get('/api/businesses', (req, res) => {
-  res.json(businesses);
-});
+app.get('/api/businesses', verifyToken, async (req: any, res) => {
+  if (!db) return res.json(businesses);
+  try {
+    const isSuperAdmin = req.user.email === process.env.SUPER_ADMIN_EMAIL;
+    let query: any = db.collection('businesses');
 
-app.get('/api/business/:id', (req, res) => {
-  const biz = businesses.find((b) => b.id === req.params.id) || businesses[0];
-  res.json(biz);
-});
+    // If not super admin, restrict to their own businesses
+    if (!isSuperAdmin) {
+      query = query.where('ownerUid', '==', req.user.uid);
+    }
 
-app.put('/api/business/:id', (req, res) => {
-  const index = businesses.findIndex((b) => b.id === req.params.id);
-  if (index === -1) {
-    return res.status(404).json({ error: 'Business not found' });
+    const snapshot = await query.get();
+    if (snapshot.empty) {
+      return res.json([]);
+    }
+    const results: any[] = [];
+    snapshot.forEach(doc => results.push(doc.data()));
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching businesses:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
+});
 
-  const { name, ownerName, ownerEmail, phone, whatsappPhoneNumberId, hours, services, stylists } = req.body;
+app.get('/api/business/:id', async (req, res) => {
+  if (!db) return res.json(businesses.find((b) => b.id === req.params.id) || businesses[0]);
+  try {
+    const docRef = db.collection('businesses').doc(req.params.id);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+    res.json(docSnap.data());
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.put('/api/business/:id', async (req, res) => {
+  const { name, ownerName, ownerEmail, phone, whatsappPhoneNumberId, hours, services, stylists, password, subscriptionStatus } = req.body;
 
   // Input Validation
   if (name && (name.trim().length === 0 || name.length > 100)) {
@@ -293,23 +334,48 @@ app.put('/api/business/:id', (req, res) => {
     return res.status(400).json({ error: 'Invalid phone format' });
   }
 
-  businesses[index] = {
-    ...businesses[index],
-    name: name ? name.trim() : businesses[index].name,
-    ownerName: ownerName ? ownerName.trim() : businesses[index].ownerName,
-    ownerEmail: ownerEmail ? ownerEmail.trim() : businesses[index].ownerEmail,
-    phone: phone ? phone.trim() : businesses[index].phone,
-    whatsappPhoneNumberId: whatsappPhoneNumberId || businesses[index].whatsappPhoneNumberId,
-    hours: hours || businesses[index].hours,
-    services: services || businesses[index].services,
-    stylists: stylists || businesses[index].stylists,
-  };
+  if (!db) return res.status(500).json({ error: 'Database not connected' });
 
-  res.json(businesses[index]);
+  try {
+    const docRef = db.collection('businesses').doc(req.params.id);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    const updates: any = {};
+    if (name) updates.name = name.trim();
+    if (ownerName) updates.ownerName = ownerName.trim();
+    if (ownerEmail) updates.ownerEmail = ownerEmail.trim();
+    if (phone) updates.phone = phone.trim();
+    if (whatsappPhoneNumberId) updates.whatsappPhoneNumberId = whatsappPhoneNumberId;
+    if (hours) updates.hours = hours;
+    if (services) updates.services = services;
+    if (stylists) updates.stylists = stylists;
+    if (subscriptionStatus) updates.subscriptionStatus = subscriptionStatus;
+
+    await docRef.update(updates);
+
+    // If password update is requested (Admin only via UI)
+    if (password && docSnap.data().ownerUid) {
+      try {
+        await getAuth().updateUser(docSnap.data().ownerUid, {
+          password: password
+        });
+      } catch (authErr) {
+        console.error('Failed to update auth password:', authErr);
+      }
+    }
+
+    const updatedSnap = await docRef.get();
+    res.json(updatedSnap.data());
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
-app.post('/api/businesses', (req, res) => {
-  const { name, ownerName, ownerEmail, phone, subscriptionCurrency, services, stylists } = req.body;
+app.post('/api/businesses', verifyToken, async (req: any, res) => {
+  const { name, ownerName, ownerEmail, phone, password, whatsappPhoneNumberId, subscriptionCurrency, requestedPlan, paymentProof, status, services, stylists } = req.body;
 
   // Validation
   if (!name || name.trim().length === 0 || name.length > 100) {
@@ -325,270 +391,397 @@ app.post('/api/businesses', (req, res) => {
     return res.status(400).json({ error: 'Invalid phone number format' });
   }
 
+  const isSuperAdmin = req.user.email === process.env.SUPER_ADMIN_EMAIL;
+  if (!isSuperAdmin) {
+    return res.status(403).json({ error: 'Only administrators can create new businesses.' });
+  }
+
+  let clientUid = req.user.uid;
+  let finalStatus = 'pending';
+
+  // If Admin is calling this, create the auth account for the client
+  if (isSuperAdmin) {
+    if (!password) return res.status(400).json({ error: 'Password is required when admin creates an account' });
+    if (!db) {
+      clientUid = `mock_uid_${Date.now()}`;
+      finalStatus = status || 'trial';
+    } else {
+      try {
+        const newUser = await getAuth().createUser({
+          email: ownerEmail.trim(),
+          password: password,
+        });
+        clientUid = newUser.uid;
+        finalStatus = status || 'trial';
+      } catch (authErr: any) {
+        return res.status(400).json({ error: authErr.message || 'Failed to create client auth account' });
+      }
+    }
+  }
+
   const newBiz: Business = {
     id: `biz_${Date.now()}`,
     name: name.trim(),
     ownerName: ownerName.trim(),
     ownerEmail: ownerEmail ? ownerEmail.trim() : 'owner@salon.pk',
+    ownerUid: clientUid,
     phone: phone || '+92 300 0000000',
-    whatsappPhoneNumberId: `phone_id_${Date.now()}`,
-    hours: defaultBusinesses[0].hours,
-    services: services || defaultBusinesses[0].services,
-    stylists: stylists || defaultBusinesses[0].stylists,
-    subscriptionStatus: 'trial',
+    whatsappPhoneNumberId: whatsappPhoneNumberId || `phone_id_${Date.now()}`,
+    hours: defaultHours,
+    services: services || defaultServices,
+    stylists: stylists || defaultStylists,
+    subscriptionStatus: finalStatus,
     subscriptionPrice: subscriptionCurrency === 'USD' ? 29 : 7500,
     subscriptionCurrency: subscriptionCurrency || 'PKR',
+    requestedPlan: requestedPlan,
+    paymentProof: paymentProof,
     createdAt: new Date().toISOString(),
   };
 
-  businesses.unshift(newBiz);
-  res.status(201).json(newBiz);
+  if (!db) {
+    businesses.unshift(newBiz);
+    return res.status(201).json(newBiz);
+  }
+
+  try {
+    await db.collection('businesses').doc(newBiz.id).set(newBiz);
+    res.status(201).json(newBiz);
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 // Conversations
-app.get('/api/conversations', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const filtered = conversations.filter((c) => c.businessId === businessId);
-  res.json(filtered);
+app.get('/api/conversations', verifyToken, async (req, res) => {
+  const { businessId } = req.query;
+  if (!businessId || typeof businessId !== 'string') {
+    return res.status(400).json({ error: 'businessId query parameter is required' });
+  }
+  if (!db) {
+    const filtered = conversations.filter((c) => c.businessId === businessId);
+    return res.json(filtered);
+  }
+  try {
+    const snapshot = await db.collection(`businesses/${businessId}/conversations`).get();
+    res.json(snapshot.docs.map(d => d.data()));
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.get('/api/conversations/:phone/messages', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
+app.get('/api/conversations/:phone/messages', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const phone = req.params.phone;
-  const thread = messages.filter(
-    (m) => m.businessId === businessId && m.customerPhone === phone
-  );
-  res.json(thread);
+  if (!db) {
+    const thread = messages.filter((m) => m.businessId === businessId && m.customerPhone === phone);
+    return res.json(thread);
+  }
+  try {
+    const snapshot = await db.collection(`businesses/${businessId}/conversations/${phone}/messages`).orderBy('timestamp', 'asc').get();
+    res.json(snapshot.docs.map(d => d.data()));
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/conversations/:phone/toggle-ai', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
+app.post('/api/conversations/:phone/toggle-ai', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const phone = req.params.phone;
-  const conv = conversations.find(
-    (c) => c.businessId === businessId && c.customerPhone === phone
-  );
-  if (conv) {
+
+  if (!db) {
+    const conv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
+    if (conv) {
+      conv.aiPaused = !conv.aiPaused;
+      agentLogs.unshift({
+        id: `log_${Date.now()}`, businessId, timestamp: new Date().toISOString(), conversationId: phone,
+        action: conv.aiPaused ? 'Salon Owner took over chat (AI Paused)' : 'Salon Owner restored AI Agent',
+        reasoning: conv.aiPaused ? 'Owner toggled manual override in dashboard' : 'Owner re-enabled AI receptionist mode',
+        success: true, toolUsed: 'manual_override'
+      });
+      return res.json(conv);
+    }
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  try {
+    const docRef = db.collection(`businesses/${businessId}/conversations`).doc(phone);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return res.status(404).json({ error: 'Conversation not found' });
+
+    const conv = docSnap.data() as Conversation;
     conv.aiPaused = !conv.aiPaused;
-    // Add system log
-    agentLogs.unshift({
-      id: `log_${Date.now()}`,
-      businessId,
-      timestamp: new Date().toISOString(),
-      conversationId: phone,
+    await docRef.update({ aiPaused: conv.aiPaused });
+
+    // Add log
+    await db.collection(`businesses/${businessId}/agentLogs`).add({
+      id: `log_${Date.now()}`, businessId, timestamp: new Date().toISOString(), conversationId: phone,
       action: conv.aiPaused ? 'Salon Owner took over chat (AI Paused)' : 'Salon Owner restored AI Agent',
       reasoning: conv.aiPaused ? 'Owner toggled manual override in dashboard' : 'Owner re-enabled AI receptionist mode',
-      success: true,
+      success: true, toolUsed: 'manual_override'
     });
     res.json(conv);
-  } else {
-    res.status(404).json({ error: 'Conversation not found' });
-  }
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/conversations/:phone/send', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
+app.post('/api/conversations/:phone/send', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const phone = req.params.phone;
-  const { text } = req.body;
+  const { text, isTemplate, templateId } = req.body;
 
-  if (!text) {
-    return res.status(400).json({ error: 'Message text is required' });
+  let finalMessageText = text;
+  const now = new Date().toISOString();
+
+  // Validate 24-hour window for manual free-form text
+  let conv = null;
+  if (!db) {
+    conv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
+  } else {
+    try {
+      const convSnap = await db.collection(`businesses/${businessId}/conversations`).doc(phone).get();
+      if (convSnap.exists) conv = convSnap.data() as Conversation;
+    } catch (e) {
+      console.error('Error fetching conv', e);
+    }
   }
 
-  const now = new Date().toISOString();
-  const newMsg: Message = {
-    id: `msg_${Date.now()}`,
-    businessId,
-    customerPhone: phone,
-    sender: 'owner',
-    text,
+  if (conv && !isTemplate) {
+    const isWindowClosed = (Date.now() - new Date(conv.lastMessageAt).getTime()) > 24 * 60 * 60 * 1000;
+    if (isWindowClosed) {
+      return res.status(403).json({ error: '24-hour window closed. Please send a pre-approved template.' });
+    }
+  }
+
+  // Handle Template injection
+  let actionStr = undefined;
+  if (isTemplate) {
+    if (templateId === 'template_1') finalMessageText = "We're here to help! Reply to this message to continue our conversation.";
+    else if (templateId === 'template_2') finalMessageText = "Hi! Just a friendly reminder about your upcoming appointment.";
+    else if (templateId === 'template_3') finalMessageText = "We miss you! Let us know if you'd like to book another visit.";
+    else finalMessageText = "We're here to help! Reply to this message to continue our conversation.";
+    actionStr = 'sent_template_reengagement';
+  } else {
+    if (!finalMessageText) return res.status(400).json({ error: 'Message text is required' });
+  }
+
+  const newMsg: Message = { 
+    id: `msg_${Date.now()}`, 
+    businessId, 
+    customerPhone: phone, 
+    sender: 'owner', 
+    text: finalMessageText, 
     timestamp: now,
+    agentAction: actionStr
   };
 
-  messages.push(newMsg);
-
-  // Update conversation
-  let conv = conversations.find(
-    (c) => c.businessId === businessId && c.customerPhone === phone
-  );
-  if (conv) {
-    conv.lastMessageAt = now;
+  if (!db) {
+    messages.push(newMsg);
+    if (conv) conv.lastMessageAt = now;
+    return res.status(201).json(newMsg);
   }
 
-  res.status(201).json(newMsg);
+  try {
+    await db.collection(`businesses/${businessId}/conversations/${phone}/messages`).doc(newMsg.id).set(newMsg);
+    await db.collection(`businesses/${businessId}/conversations`).doc(phone).update({ lastMessageAt: now });
+    res.status(201).json(newMsg);
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // Bookings
-app.get('/api/bookings', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const filtered = bookings.filter((b) => b.businessId === businessId);
-  res.json(filtered);
+app.get('/api/bookings', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const filtered = bookings.filter((b) => b.businessId === businessId);
+    return res.json(filtered);
+  }
+  try {
+    const snapshot = await db.collection(`businesses/${businessId}/bookings`).orderBy('createdAt', 'desc').get();
+    res.json(snapshot.docs.map(d => d.data()));
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/bookings', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
+app.post('/api/bookings', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { customerPhone, customerName, serviceId, stylistId, startTime, notes } = req.body;
 
-  const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-  const service = biz.services.find((s) => s.id === serviceId) || biz.services[0];
-  const duration = service ? service.durationMinutes : 45;
-
   const start = new Date(startTime);
-  const end = new Date(start.getTime() + duration * 60 * 1000);
+  const end = new Date(start.getTime() + 45 * 60 * 1000); // Default duration 45m if db fails
 
   const newBooking: Booking = {
-    id: `bk_${Date.now()}`,
-    businessId,
+    id: `bk_${Date.now()}`, businessId,
     customerPhone: customerPhone || '+92 300 1234567',
     customerName: customerName || 'Walk-in Customer',
-    serviceId: serviceId || biz.services[0].id,
-    stylistId: stylistId || (biz.stylists[0] ? biz.stylists[0].id : undefined),
+    serviceId: serviceId || 'srv_haircut',
+    stylistId: stylistId || undefined,
     startTime: start.toISOString(),
     endTime: end.toISOString(),
-    status: 'confirmed',
-    createdBy: 'owner',
+    status: 'confirmed', createdBy: 'owner',
     createdAt: new Date().toISOString(),
     notes: notes || '',
   };
 
-  bookings.unshift(newBooking);
-  res.status(201).json(newBooking);
+  if (!db) {
+    bookings.unshift(newBooking);
+    return res.status(201).json(newBooking);
+  }
+
+  try {
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    if (bizSnap.exists) {
+      const biz = bizSnap.data() as Business;
+      const service = biz.services.find(s => s.id === serviceId);
+      if (service) {
+        newBooking.endTime = new Date(start.getTime() + service.durationMinutes * 60 * 1000).toISOString();
+      }
+    }
+    await db.collection(`businesses/${businessId}/bookings`).doc(newBooking.id).set(newBooking);
+    res.status(201).json(newBooking);
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.patch('/api/bookings/:id/status', (req, res) => {
+app.patch('/api/bookings/:id/status', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { status } = req.body;
-  const bk = bookings.find((b) => b.id === req.params.id);
-  if (bk) {
-    bk.status = status;
-    res.json(bk);
-  } else {
-    res.status(404).json({ error: 'Booking not found' });
+  if (!db) {
+    const bk = bookings.find((b) => b.id === req.params.id);
+    if (bk) {
+      bk.status = status;
+      return res.json(bk);
+    }
+    return res.status(404).json({ error: 'Booking not found' });
   }
+
+  try {
+    const docRef = db.collection(`businesses/${businessId}/bookings`).doc(req.params.id);
+    await docRef.update({ status });
+    const snap = await docRef.get();
+    res.json(snap.data());
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // Customers list
-app.get('/api/customers', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-
-  // Aggregate customers from conversations and bookings
-  const customerMap = new Map<string, Customer>();
-
-  conversations
-    .filter((c) => c.businessId === businessId)
-    .forEach((c) => {
-      customerMap.set(c.customerPhone, {
-        phone: c.customerPhone,
-        name: c.customerName || 'Customer',
-        firstSeenAt: c.lastMessageAt,
-        totalBookings: 0,
-        completedBookings: 0,
-        totalSpent: 0,
-      });
+app.get('/api/customers', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
+    const customerMap = new Map<string, Customer>();
+    conversations.filter((c) => c.businessId === businessId).forEach((c) => {
+      customerMap.set(c.customerPhone, { phone: c.customerPhone, name: c.customerName || 'Customer', firstSeenAt: c.lastMessageAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 });
     });
-
-  bookings
-    .filter((b) => b.businessId === businessId)
-    .forEach((b) => {
+    bookings.filter((b) => b.businessId === businessId).forEach((b) => {
       const service = biz.services.find((s) => s.id === b.serviceId);
       const price = service ? service.price : 3000;
-
-      const existing = customerMap.get(b.customerPhone) || {
-        phone: b.customerPhone,
-        name: b.customerName,
-        firstSeenAt: b.createdAt,
-        totalBookings: 0,
-        completedBookings: 0,
-        totalSpent: 0,
-      };
-
+      const existing = customerMap.get(b.customerPhone) || { phone: b.customerPhone, name: b.customerName, firstSeenAt: b.createdAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 };
       existing.totalBookings += 1;
-      if (b.status === 'completed') {
-        existing.completedBookings += 1;
-        existing.totalSpent += price;
-      }
-      if (!existing.lastBookingDate || new Date(b.startTime) > new Date(existing.lastBookingDate)) {
-        existing.lastBookingDate = b.startTime;
-      }
-
+      if (b.status === 'completed') { existing.completedBookings += 1; existing.totalSpent += price; }
+      if (!existing.lastBookingDate || new Date(b.startTime) > new Date(existing.lastBookingDate)) { existing.lastBookingDate = b.startTime; }
       customerMap.set(b.customerPhone, existing);
     });
+    return res.json(Array.from(customerMap.values()));
+  }
 
-  res.json(Array.from(customerMap.values()));
+  try {
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    const biz = bizSnap.data() as Business;
+    const customerMap = new Map<string, Customer>();
+    const convSnap = await db.collection(`businesses/${businessId}/conversations`).get();
+    convSnap.forEach(doc => {
+      const c = doc.data() as Conversation;
+      customerMap.set(c.customerPhone, { phone: c.customerPhone, name: c.customerName || 'Customer', firstSeenAt: c.lastMessageAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 });
+    });
+
+    const bkSnap = await db.collection(`businesses/${businessId}/bookings`).get();
+    bkSnap.forEach(doc => {
+      const b = doc.data() as Booking;
+      const service = biz.services.find(s => s.id === b.serviceId);
+      const price = service ? service.price : 3000;
+      const existing = customerMap.get(b.customerPhone) || { phone: b.customerPhone, name: b.customerName, firstSeenAt: b.createdAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 };
+      existing.totalBookings += 1;
+      if (b.status === 'completed') { existing.completedBookings += 1; existing.totalSpent += price; }
+      if (!existing.lastBookingDate || new Date(b.startTime) > new Date(existing.lastBookingDate)) { existing.lastBookingDate = b.startTime; }
+      customerMap.set(b.customerPhone, existing);
+    });
+    res.json(Array.from(customerMap.values()));
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // Agent Logs
-app.get('/api/agent-logs', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const filtered = agentLogs.filter((l) => l.businessId === businessId);
-  res.json(filtered);
+app.get('/api/agent-logs', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const filtered = agentLogs.filter((l) => l.businessId === businessId);
+    return res.json(filtered);
+  }
+  try {
+    const snap = await db.collection(`businesses/${businessId}/agentLogs`).orderBy('timestamp', 'desc').get();
+    res.json(snap.docs.map(d => d.data()));
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // Billing
-app.get('/api/billing', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-  const history = payments.filter((p) => p.businessId === businessId);
-
-  res.json({
-    subscriptionStatus: biz.subscriptionStatus,
-    price: biz.subscriptionPrice,
-    currency: biz.subscriptionCurrency,
-    payments: history,
-  });
+app.get('/api/billing', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
+    const history = payments.filter((p) => p.businessId === businessId);
+    return res.json({ subscriptionStatus: biz.subscriptionStatus, price: biz.subscriptionPrice, currency: biz.subscriptionCurrency, payments: history });
+  }
+  try {
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    const biz = bizSnap.data() as Business;
+    const snap = await db.collection(`businesses/${businessId}/payments`).orderBy('recordedAt', 'desc').get();
+    res.json({ subscriptionStatus: biz.subscriptionStatus, price: biz.subscriptionPrice, currency: biz.subscriptionCurrency, payments: snap.docs.map(d => d.data()) });
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/billing/payment', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
+app.post('/api/billing/payment', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { amount, currency, method, periodCovered, notes } = req.body;
+  const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 7500, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes || 'Manual subscription payment recorded by salon owner' };
 
-  const newPayment: Payment = {
-    id: `pay_${Date.now()}`,
-    businessId,
-    amount: Number(amount) || 7500,
-    currency: currency || 'PKR',
-    method: method || 'jazzcash',
-    periodCovered: periodCovered || '2026-08',
-    recordedAt: new Date().toISOString(),
-    notes: notes || 'Manual subscription payment recorded by salon owner',
-  };
-
-  payments.unshift(newPayment);
-
-  // Update business status
-  const biz = businesses.find((b) => b.id === businessId);
-  if (biz) {
-    biz.subscriptionStatus = 'active';
+  if (!db) {
+    payments.unshift(newPayment);
+    const biz = businesses.find((b) => b.id === businessId);
+    if (biz) biz.subscriptionStatus = 'active';
+    return res.status(201).json(newPayment);
   }
 
-  res.status(201).json(newPayment);
+  try {
+    await db.collection(`businesses/${businessId}/payments`).doc(newPayment.id).set(newPayment);
+    await db.collection('businesses').doc(businessId).update({ subscriptionStatus: 'active' });
+    res.status(201).json(newPayment);
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // Analytics
-app.get('/api/analytics', (req, res) => {
-  const businessId = (req.query.businessId as string) || businesses[0].id;
-  const biz = businesses.find((b) => b.id === businessId) || businesses[0];
+app.get('/api/analytics', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
+    const bizBookings = bookings.filter((b) => b.businessId === businessId);
+    const aiBookings = bizBookings.filter((b) => b.createdBy === 'ai').length;
+    const manualBookings = bizBookings.filter((b) => b.createdBy === 'owner').length;
+    const totalRevenue = bizBookings.filter((b) => b.status === 'completed' || b.status === 'confirmed').reduce((sum, b) => {
+      const srv = biz.services.find((s) => s.id === b.serviceId); return sum + (srv ? srv.price : 3000);
+    }, 0);
+    return res.json({ messagesHandledThisMonth: messages.filter((m) => m.businessId === businessId).length, aiBookingsCount: aiBookings, manualBookingsCount: manualBookings, estimatedNoShowsPrevented: Math.round(aiBookings * 0.35), avgResponseTimeSeconds: 2.1, revenueGenerated: totalRevenue });
+  }
 
-  const bizBookings = bookings.filter((b) => b.businessId === businessId);
-  const aiBookings = bizBookings.filter((b) => b.createdBy === 'ai').length;
-  const manualBookings = bizBookings.filter((b) => b.createdBy === 'owner').length;
-
-  const totalRevenue = bizBookings
-    .filter((b) => b.status === 'completed' || b.status === 'confirmed')
-    .reduce((sum, b) => {
-      const srv = biz.services.find((s) => s.id === b.serviceId);
-      return sum + (srv ? srv.price : 3000);
+  try {
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    const biz = bizSnap.data() as Business;
+    const bkSnap = await db.collection(`businesses/${businessId}/bookings`).get();
+    const bizBookings = bkSnap.docs.map(d => d.data() as Booking);
+    const aiBookings = bizBookings.filter((b) => b.createdBy === 'ai').length;
+    const manualBookings = bizBookings.filter((b) => b.createdBy === 'owner').length;
+    const totalRevenue = bizBookings.filter((b) => b.status === 'completed' || b.status === 'confirmed').reduce((sum, b) => {
+      const srv = biz.services.find((s) => s.id === b.serviceId); return sum + (srv ? srv.price : 3000);
     }, 0);
 
-  const summary: AnalyticsSummary = {
-    messagesHandledThisMonth: messages.filter((m) => m.businessId === businessId).length,
-    aiBookingsCount: aiBookings,
-    manualBookingsCount: manualBookings,
-    estimatedNoShowsPrevented: Math.round(aiBookings * 0.35),
-    avgResponseTimeSeconds: 2.1,
-    revenueGenerated: totalRevenue,
-  };
-
-  res.json(summary);
+    res.json({
+      messagesHandledThisMonth: 120, // Example stat
+      aiBookingsCount: aiBookings,
+      manualBookingsCount: manualBookings,
+      estimatedNoShowsPrevented: Math.round(aiBookings * 0.35),
+      avgResponseTimeSeconds: 2.1,
+      revenueGenerated: totalRevenue,
+    });
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
 // ==================== GEMINI AI AGENT & FUNCTION CALLING ENGINE ====================
@@ -601,7 +794,8 @@ const checkAvailabilityTool: FunctionDeclaration = {
     type: 'object',
     properties: {
       serviceId: { type: 'string', description: 'Service ID or name' },
-      date: { type: 'string', description: 'Date in YYYY-MM-DD or relative terms like "today", "tomorrow"' },
+      stylistId: { type: 'string', description: 'Optional stylist ID or name' },
+      date: { type: 'string', description: 'Date MUST be in strict YYYY-MM-DD format (e.g., "2026-08-03"). Convert natural language like "tomorrow" to this exact format.' },
     },
     required: ['serviceId', 'date'],
   },
@@ -683,22 +877,22 @@ const escalateToOwnerSnakeTool: FunctionDeclaration = {
 };
 
 // Helper function to execute tools locally against in-memory DB
-function executeTool(
+async function executeTool(
   biz: Business,
   customerPhone: string,
   customerName: string,
   rawToolName: string,
   args: any
-): { result: any; actionName: string } {
+): Promise<{ result: any; actionName: string }> {
   console.log(`Executing tool [${rawToolName}] with args:`, args);
 
   // Normalize tool names (supports both camelCase and snake_case)
   const name = rawToolName === 'checkAvailability' ? 'check_availability'
     : rawToolName === 'createBooking' ? 'create_booking'
-    : rawToolName === 'rescheduleBooking' ? 'reschedule_booking'
-    : rawToolName === 'cancelBooking' ? 'cancel_booking'
-    : rawToolName === 'escalateToOwner' ? 'escalate_to_owner'
-    : rawToolName;
+      : rawToolName === 'rescheduleBooking' ? 'reschedule_booking'
+        : rawToolName === 'cancelBooking' ? 'cancel_booking'
+          : rawToolName === 'escalateToOwner' ? 'escalate_to_owner'
+            : rawToolName;
 
   if (name === 'check_availability') {
     const serviceName = args.serviceId || 'Service';
@@ -706,15 +900,85 @@ function executeTool(
       (s) => s.id === args.serviceId || s.name.toLowerCase().includes((args.serviceId || '').toLowerCase())
     ) || biz.services[0];
 
-    const openSlots = ['10:00 AM', '11:30 AM', '02:00 PM', '04:00 PM', '06:00 PM'];
+    const matchedStylist = biz.stylists.find(
+      (st) => st.id === args.stylistId || st.name.toLowerCase().includes((args.stylistId || '').toLowerCase())
+    ) || biz.stylists[0];
+
+    // 1. Parse date
+    let targetDate = new Date(args.date);
+    if (isNaN(targetDate.getTime())) {
+      targetDate = new Date();
+    }
+
+    // 2. Determine hours
+    const days: (keyof typeof biz.hours)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const dayStr = days[targetDate.getDay()];
+    const bizHours = biz.hours[dayStr];
+    
+    let openSlots: string[] = [];
+
+    if (!bizHours.closed) {
+      const [openH, openM] = bizHours.open.split(':').map(Number);
+      const [closeH, closeM] = bizHours.close.split(':').map(Number);
+      
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(openH, openM, 0, 0);
+      
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(closeH, closeM, 0, 0);
+
+      // 3. Fetch existing bookings
+      const dayBookings = bookings.filter((b) => {
+        if (b.status === 'cancelled') return false;
+        if (b.businessId !== biz.id) return false;
+        if (matchedStylist && b.stylistId && b.stylistId !== matchedStylist.id) return false;
+        
+        const bStart = new Date(b.startTime);
+        return bStart.toDateString() === targetDate.toDateString();
+      });
+
+      // 4. Generate overlapping slots
+      const slotDuration = matchedService.durationMinutes;
+      let currentSlot = new Date(startOfDay);
+
+      // Ensure we don't return slots in the past if checking for today
+      const now = new Date();
+      if (currentSlot.getTime() < now.getTime() && targetDate.toDateString() === now.toDateString()) {
+        // fast forward currentSlot to next 30 min boundary after now
+        currentSlot.setTime(Math.ceil(now.getTime() / (30 * 60 * 1000)) * (30 * 60 * 1000));
+      }
+
+      while (currentSlot.getTime() + slotDuration * 60 * 1000 <= endOfDay.getTime()) {
+        const slotStart = currentSlot.getTime();
+        const slotEnd = slotStart + slotDuration * 60 * 1000;
+
+        let isOverlap = false;
+        for (const b of dayBookings) {
+          const bStart = new Date(b.startTime).getTime();
+          const bEnd = new Date(b.endTime).getTime();
+          if (slotStart < bEnd && slotEnd > bStart) {
+            isOverlap = true;
+            break;
+          }
+        }
+
+        if (!isOverlap) {
+          openSlots.push(currentSlot.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+        }
+
+        // Advance by 30 mins
+        currentSlot = new Date(currentSlot.getTime() + 30 * 60 * 1000);
+      }
+    }
+
     return {
       result: {
         service: matchedService.name,
         price: `${biz.subscriptionCurrency === 'PKR' ? 'PKR' : '$'} ${matchedService.price}`,
         duration: `${matchedService.durationMinutes} minutes`,
         requestedDate: args.date,
-        availableSlots: openSlots,
-        assignedStylist: args.stylistId || (biz.stylists[0] ? biz.stylists[0].name : 'Any available stylist'),
+        availableSlots: openSlots.length > 0 ? openSlots : ["No slots available"],
+        assignedStylist: matchedStylist.name,
       },
       actionName: 'checked_availability',
     };
@@ -751,6 +1015,11 @@ function executeTool(
     };
 
     bookings.unshift(newBk);
+    if (db) {
+      try {
+        await db.collection(`businesses/${biz.id}/bookings`).doc(newBk.id).set(newBk);
+      } catch (e) { console.error('Failed to save booking', e); }
+    }
 
     return {
       result: {
@@ -771,6 +1040,14 @@ function executeTool(
     if (bk) {
       bk.startTime = args.newStartTime || new Date(Date.now() + 24 * 3600 * 1000).toISOString();
       bk.status = 'confirmed';
+      if (db) {
+        try {
+          await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
+            startTime: bk.startTime,
+            status: bk.status
+          });
+        } catch (e) { console.error('Failed to update booking reschedule', e); }
+      }
       return {
         result: { status: 'rescheduled', bookingId: bk.id, newStartTime: bk.startTime },
         actionName: 'rescheduled_booking',
@@ -786,6 +1063,13 @@ function executeTool(
     const bk = bookings.find((b) => b.id === args.bookingId || b.customerPhone === customerPhone);
     if (bk) {
       bk.status = 'cancelled';
+      if (db) {
+        try {
+          await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
+            status: bk.status
+          });
+        } catch (e) { console.error('Failed to update booking cancel', e); }
+      }
       return {
         result: { status: 'cancelled', bookingId: bk.id },
         actionName: 'cancelled_booking',
@@ -801,6 +1085,13 @@ function executeTool(
     const conv = conversations.find((c) => c.businessId === biz.id && c.customerPhone === customerPhone);
     if (conv) {
       conv.aiPaused = true;
+      if (db) {
+        try {
+          await db.collection(`businesses/${biz.id}/conversations`).doc(customerPhone).update({
+            aiPaused: true
+          });
+        } catch (e) { console.error('Failed to update aiPaused on escalate', e); }
+      }
     }
     return {
       result: { status: 'escalated', ownerAlerted: true, reason: args.reason },
@@ -809,6 +1100,40 @@ function executeTool(
   }
 
   return { result: { success: true }, actionName: 'ai_tool_call' };
+}
+
+// Meta WhatsApp Cloud API Message Sender
+async function sendWhatsAppMessage(phoneNumberId: string, toPhone: string, text: string) {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  if (!token) {
+    console.warn('WHATSAPP_ACCESS_TOKEN missing. Skipping Meta API call.');
+    return;
+  }
+  const cleanPhone = toPhone.replace(/\+/g, '');
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone,
+        type: 'text',
+        text: { preview_url: false, body: text }
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('Meta API Error sending message:', data);
+    } else {
+      console.log('Successfully sent WhatsApp reply to', cleanPhone);
+    }
+  } catch (err) {
+    console.error('Failed to send WhatsApp message:', err);
+  }
 }
 
 // Standardized Inbound WhatsApp AI Message Processing Engine
@@ -828,8 +1153,32 @@ async function handleIncomingMessage({
   aiPaused?: boolean;
   isTemplate?: boolean;
 }> {
-  const currentBizId = businessId || businesses[0].id;
-  const biz = businesses.find((b) => b.id === currentBizId) || businesses[0];
+  let biz: Business | undefined;
+  let currentBizId = businessId;
+
+  if (db && currentBizId) {
+    try {
+      const doc = await db.collection('businesses').doc(currentBizId).get();
+      if (doc.exists) {
+        biz = doc.data() as Business;
+      }
+    } catch (e) {
+      console.error('Error fetching business in handleIncomingMessage:', e);
+    }
+  }
+
+  // Fallbacks if not found
+  if (!biz) {
+    if (businesses.length > 0) {
+      biz = businesses.find((b) => b.id === currentBizId) || businesses[0];
+      currentBizId = biz.id;
+    } else {
+      console.error(`handleIncomingMessage: No business found for id ${currentBizId}`);
+      return { replyText: 'System Error: Salon account not found.', agentAction: 'error' };
+    }
+  }
+
+  currentBizId = biz.id;
   const phone = customerPhone || '+92 300 9998877';
   const name = customerName || 'Customer';
 
@@ -838,7 +1187,7 @@ async function handleIncomingMessage({
   const { sanitizedText, isInjectionAttempt } = sanitizeAndCheckPromptInjection(rawText);
 
   if (isInjectionAttempt) {
-    agentLogs.unshift({
+    const logItem: AgentLog = {
       id: `log_${Date.now()}`,
       businessId: currentBizId,
       timestamp: new Date().toISOString(),
@@ -847,7 +1196,13 @@ async function handleIncomingMessage({
       toolUsed: 'security_filter',
       reasoning: `Prompt injection attack pattern detected and sanitized from customer: "${rawText.substring(0, 100)}"`,
       success: false,
-    });
+    };
+    agentLogs.unshift(logItem);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
+      } catch (e) { console.error('Failed to save log', e); }
+    }
   }
 
   // 2. Check Rate Limits & Daily Cost Controls
@@ -858,7 +1213,7 @@ async function handleIncomingMessage({
       ? `Hello ${name}, thank you for contacting ${biz.name}! Our automated receptionist daily message capacity has been reached for today. Our human salon team will assist you directly shortly!`
       : `Hello ${name}, you've sent messages too quickly. Please wait a moment before sending another message.`;
 
-    agentLogs.unshift({
+    const logItem: AgentLog = {
       id: `log_${Date.now()}`,
       businessId: currentBizId,
       timestamp: new Date().toISOString(),
@@ -867,7 +1222,13 @@ async function handleIncomingMessage({
       toolUsed: 'rate_limiter',
       reasoning: `Request blocked due to: ${rateLimitStatus.reason}`,
       success: false,
-    });
+    };
+    agentLogs.unshift(logItem);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
+      } catch (e) { console.error('Failed to save log', e); }
+    }
 
     return {
       replyText: rateLimitReply,
@@ -878,21 +1239,7 @@ async function handleIncomingMessage({
 
   const now = new Date().toISOString();
 
-  // 3. 24-Hour Customer Service Window Check
   let conv = conversations.find((c) => c.businessId === currentBizId && c.customerPhone === phone);
-  const previousLastMessageAt = conv ? conv.lastMessageAt : null;
-
-  let isWindowOpen = true;
-  if (previousLastMessageAt) {
-    const elapsedMs = Date.now() - new Date(previousLastMessageAt).getTime();
-    const elapsedHours = elapsedMs / (1000 * 60 * 60);
-    if (elapsedHours > 24) {
-      isWindowOpen = false;
-    }
-  } else {
-    // New conversation with no prior record
-    isWindowOpen = false;
-  }
 
   // Save customer message
   const custMsg: Message = {
@@ -904,6 +1251,11 @@ async function handleIncomingMessage({
     timestamp: now,
   };
   messages.push(custMsg);
+  if (db) {
+    try {
+      await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(custMsg.id).set(custMsg);
+    } catch (e) { console.error('Failed to save custMsg', e); }
+  }
 
   // Update conversation record timestamp
   if (!conv) {
@@ -917,9 +1269,22 @@ async function handleIncomingMessage({
       unreadCount: 0,
     };
     conversations.unshift(conv);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/conversations`).doc(phone).set(conv);
+      } catch (e) { console.error('Failed to save conv', e); }
+    }
   } else {
     conv.lastMessageAt = now;
     if (name && name !== 'Customer') conv.customerName = name;
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/conversations`).doc(phone).update({ 
+          lastMessageAt: now,
+          customerName: conv.customerName 
+        });
+      } catch (e) { console.error('Failed to update conv', e); }
+    }
   }
 
   // Check if owner took over
@@ -931,39 +1296,7 @@ async function handleIncomingMessage({
     };
   }
 
-  // If 24-hour window was expired or new conversation, send approved WhatsApp Message Template
-  if (!isWindowOpen) {
-    const templateReplyText = `We're here to help at ${biz.name}! Reply to this message and we'll get right back to you.`;
-
-    const templateMsg: Message = {
-      id: `msg_${Date.now() + 1}`,
-      businessId: currentBizId,
-      customerPhone: phone,
-      sender: 'agent',
-      text: templateReplyText,
-      timestamp: new Date().toISOString(),
-      agentAction: 'sent_template_reengagement',
-    };
-    messages.push(templateMsg);
-
-    agentLogs.unshift({
-      id: `log_${Date.now()}`,
-      businessId: currentBizId,
-      timestamp: new Date().toISOString(),
-      conversationId: phone,
-      action: '24H_WINDOW_EXPIRED_TEMPLATE_SENT',
-      toolUsed: 'whatsapp_graph_api',
-      reasoning: `24-hour customer service window was closed or uninitiated. Sent approved Meta message template instead of calling Gemini.`,
-      success: true,
-    });
-
-    return {
-      replyText: templateReplyText,
-      agentAction: 'sent_template_reengagement',
-      aiPaused: conv.aiPaused,
-      isTemplate: true,
-    };
-  }
+  // (Removed faulty template re-engagement logic because customer just messaged, window is always open here)
 
   // Process with Gemini API
   const aiClient = getGenAI();
@@ -981,6 +1314,11 @@ async function handleIncomingMessage({
       agentAction: 'checked_availability',
     };
     messages.push(agentMsg);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
+      } catch (e) { console.error('Failed to save agentMsg (fallback)', e); }
+    }
 
     return {
       replyText: simulatedReply,
@@ -990,12 +1328,33 @@ async function handleIncomingMessage({
 
   try {
     // Context Window Slicing: Max 8 messages to constrain token usage & costs
-    const existingThread = messages
+    let existingThread = messages
       .filter((m) => m.businessId === currentBizId && m.customerPhone === phone)
       .slice(-8);
 
+    // If server restarted, memory is empty (only has current message). Fetch context from DB!
+    if (existingThread.length === 1 && db) {
+      try {
+        const snap = await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`)
+          .orderBy('timestamp', 'desc')
+          .limit(8)
+          .get();
+        if (!snap.empty) {
+          const dbMessages = snap.docs.map(d => d.data() as Message).reverse();
+          existingThread = dbMessages;
+          
+          // Hydrate memory to avoid re-fetching
+          for (const msg of dbMessages) {
+            if (!messages.find(m => m.id === msg.id)) messages.push(msg);
+          }
+        }
+      } catch (e) { console.error('Failed to load context from DB', e); }
+    }
+
     const systemInstruction = `
 You are SalonAI, an exceptionally friendly, articulate, professional, and efficient WhatsApp AI receptionist for "${biz.name}".
+
+CURRENT DATE & TIME: ${new Date().toLocaleString()} (Always base availability and bookings relative to this date).
 
 Salon Details:
 - Name: ${biz.name}
@@ -1013,7 +1372,9 @@ ${biz.stylists.map((st) => `  * ${st.name} (Specialties: ${st.specialties.join('
 Your primary duties:
 1. Answer questions clearly about services, pricing, opening hours, and address.
 2. Check real-time availability using the 'check_availability' tool before proposing time slots.
-3. Book appointments using the 'create_booking' tool when the customer selects a time. Always format confirmations nicely with emojis and bullet points!
+3. Book appointments using the 'create_booking' tool when the customer selects a time. 
+   - CRITICAL: ALWAYS ask for the customer's name before creating the booking, unless they've already explicitly told you their name.
+   - CRITICAL: After the 'create_booking' tool succeeds, you MUST include the unique Booking ID in your confirmation message to the customer.
 4. Reschedule or cancel existing bookings using 'reschedule_booking' or 'cancel_booking'.
 5. If the customer asks for custom discounts, complains, or requests special unapproved packages, use 'escalate_to_owner' to loop in ${biz.ownerName}.
 6. Keep messages warm, concise, and formatted naturally for WhatsApp (use line breaks and emojis where appropriate).
@@ -1025,14 +1386,14 @@ Your primary duties:
       parts: [{ text: m.text }],
     }));
 
-    // Call Gemini with tool definitions and COST CONTROLS (gemini-2.5-flash-lite, maxOutputTokens: 350)
+    // Call Gemini with tool definitions and COST CONTROLS
     let response = await aiClient.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash-lite',
       contents,
       config: {
         systemInstruction,
         temperature: 0.3,
-        maxOutputTokens: 350,
+        maxOutputTokens: 1000,
         tools: [
           {
             functionDeclarations: [
@@ -1053,11 +1414,11 @@ Your primary duties:
     const functionCalls = response.functionCalls;
     if (functionCalls && functionCalls.length > 0) {
       const toolCall = functionCalls[0];
-      const { result, actionName } = executeTool(biz, phone, name, toolCall.name, toolCall.args);
+      const { result, actionName } = await executeTool(biz, phone, name, toolCall.name, toolCall.args);
       lastAction = actionName;
 
       // Log AI reasoning/action
-      agentLogs.unshift({
+      const logItem: AgentLog = {
         id: `log_${Date.now()}`,
         businessId: currentBizId,
         timestamp: new Date().toISOString(),
@@ -1066,7 +1427,13 @@ Your primary duties:
         toolUsed: toolCall.name,
         reasoning: `Customer asked: "${sanitizedText}". Function output: ${JSON.stringify(result)}`,
         success: true,
-      });
+      };
+      agentLogs.unshift(logItem);
+      if (db) {
+        try {
+          await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
+        } catch (e) { console.error('Failed to save log', e); }
+      }
 
       // Second turn: send function response back to Gemini with cost controls
       const followUpContents = [
@@ -1081,17 +1448,20 @@ Your primary duties:
                 response: result,
               },
             },
+            {
+              text: 'Tool execution successful. Please generate your natural language reply to the user now based on these results.',
+            }
           ],
         },
       ];
 
       response = await aiClient.models.generateContent({
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.5-flash-lite',
         contents: followUpContents,
         config: {
           systemInstruction,
           temperature: 0.3,
-          maxOutputTokens: 350,
+          maxOutputTokens: 1000,
         },
       });
     }
@@ -1111,6 +1481,11 @@ Your primary duties:
       agentAction: lastAction,
     };
     messages.push(agentMsg);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
+      } catch (e) { console.error('Failed to save agentMsg', e); }
+    }
 
     return {
       replyText,
@@ -1131,6 +1506,11 @@ Your primary duties:
       agentAction: 'replied_fallback',
     };
     messages.push(agentMsg);
+    if (db) {
+      try {
+        await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
+      } catch (e) { console.error('Failed to save agentMsg (error fallback)', e); }
+    }
 
     return {
       replyText: fallbackReply,
@@ -1177,15 +1557,32 @@ app.post('/api/whatsapp/webhook', (req, res) => {
 
   // Parse Meta WhatsApp Webhook Payload asynchronously
   if (body && body.object === 'whatsapp_business_account' && Array.isArray(body.entry)) {
-    for (const entry of body.entry) {
+    const processWebhook = async () => {
+      for (const entry of body.entry) {
       if (Array.isArray(entry.changes)) {
         for (const change of entry.changes) {
           const value = change.value;
           if (value && Array.isArray(value.messages)) {
             const metaPhoneNumberId = value.metadata?.phone_number_id;
-            // Match business tenant by whatsappPhoneNumberId or fallback to first business
-            const matchedBiz =
-              businesses.find((b) => b.whatsappPhoneNumberId === metaPhoneNumberId) || businesses[0];
+            
+            let matchedBiz: Business | undefined;
+            if (db) {
+              try {
+                const snapshot = await db.collection('businesses').where('whatsappPhoneNumberId', '==', metaPhoneNumberId).get();
+                if (!snapshot.empty) {
+                  matchedBiz = snapshot.docs[0].data() as Business;
+                }
+              } catch (e) {
+                console.error('Error fetching business by WhatsApp ID:', e);
+              }
+            } else {
+              matchedBiz = businesses.find((b) => b.whatsappPhoneNumberId === metaPhoneNumberId) || businesses[0];
+            }
+
+            if (!matchedBiz) {
+              console.warn(`No business found for WhatsApp Phone ID: ${metaPhoneNumberId}`);
+              continue;
+            }
 
             for (const message of value.messages) {
               // Only process inbound customer text messages (ignore status updates like 'delivered'/'read')
@@ -1203,6 +1600,10 @@ app.post('/api/whatsapp/webhook', (req, res) => {
                   customerPhone,
                   customerName,
                   text,
+                }).then(async (result) => {
+                  if (result.replyText && !result.aiPaused && metaPhoneNumberId) {
+                    await sendWhatsAppMessage(metaPhoneNumberId, customerPhone, result.replyText);
+                  }
                 }).catch((err) => {
                   console.error('Error executing handleIncomingMessage from webhook:', err);
                 });
@@ -1212,6 +1613,8 @@ app.post('/api/whatsapp/webhook', (req, res) => {
         }
       }
     }
+    };
+    processWebhook();
   }
 });
 

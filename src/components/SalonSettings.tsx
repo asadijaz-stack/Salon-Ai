@@ -11,17 +11,21 @@ import {
   Phone,
   User,
   Sparkles,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Business, Service, Stylist, WeeklyHours, BusinessHours } from '../types';
 
 interface SalonSettingsProps {
   business: Business;
   onUpdateBusiness: (updated: Business) => void;
+  isSuperAdmin?: boolean;
 }
 
 export const SalonSettings: React.FC<SalonSettingsProps> = ({
   business,
   onUpdateBusiness,
+  isSuperAdmin = false,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'info' | 'hours' | 'services' | 'stylists'>('services');
 
@@ -31,6 +35,8 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
   const [ownerEmail, setOwnerEmail] = useState(business.ownerEmail);
   const [phone, setPhone] = useState(business.phone);
   const [whatsappPhoneId, setWhatsappPhoneId] = useState(business.whatsappPhoneNumberId);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Local state for services
   const [services, setServices] = useState<Service[]>(business.services);
@@ -64,15 +70,19 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
       stylists,
     };
 
+    // Add password only if it's explicitly set to change it
+    const updatePayload = password ? { ...updatedBiz, password } : updatedBiz;
+
     try {
       const res = await fetch(`/api/business/${business.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedBiz),
+        body: JSON.stringify(updatePayload),
       });
 
       if (res.ok) {
         onUpdateBusiness(updatedBiz);
+        setPassword('');
         setSavedSuccess(true);
         setTimeout(() => setSavedSuccess(false), 3000);
       }
@@ -159,7 +169,7 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
           { id: 'services', label: `Services Menu (${services.length})`, icon: DollarSign },
           { id: 'stylists', label: `Stylists & Staff (${stylists.length})`, icon: Scissors },
           { id: 'hours', label: 'Opening Hours', icon: Clock },
-          { id: 'info', label: 'Business Profile', icon: User },
+          ...(isSuperAdmin ? [{ id: 'info', label: 'Business Profile', icon: User }] : []),
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -450,7 +460,7 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
       )}
 
       {/* TAB 4: BUSINESS PROFILE */}
-      {activeSubTab === 'info' && (
+      {isSuperAdmin && activeSubTab === 'info' && (
         <div className="bg-white border border-[#EDEDEB] rounded-2xl p-6 shadow-xs max-w-2xl text-xs space-y-4">
           <div>
             <label className="block text-gray-500 mb-1">Salon Name *</label>
@@ -499,9 +509,32 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
                 type="text"
                 value={whatsappPhoneId}
                 onChange={(e) => setWhatsappPhoneId(e.target.value)}
-                className="w-full bg-[#FCFCFB] text-[#37352F] p-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400 font-mono"
+                className="w-full bg-[#FCFCFB] text-[#37352F] p-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400 font-mono text-[10px]"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-500 mb-1">Reset Dashboard Password (Optional)</label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Leave blank to keep current password"
+                className="w-full bg-[#FCFCFB] text-[#37352F] p-2.5 pr-10 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">
+              Only fill this out if you need to reset the salon owner's login password.
+            </p>
           </div>
         </div>
       )}

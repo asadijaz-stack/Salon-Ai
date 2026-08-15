@@ -24,6 +24,8 @@ interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onOpenOnboarding: () => void;
+  onLogout: () => void;
+  isSuperAdmin?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   onOpenOnboarding,
+  onLogout,
+  isSuperAdmin = false,
 }) => {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
 
@@ -43,10 +47,13 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'services', label: 'Services & Stylists', icon: Settings },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'logs', label: 'AI Agent Logs', icon: Bot },
-    { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'export', label: 'Cloud Function', icon: Code2 },
   ];
+
+  if (isSuperAdmin) {
+    navItems.push({ id: 'billing', label: 'Billing', icon: CreditCard });
+    navItems.push({ id: 'export', label: 'Cloud Function', icon: Code2 });
+  }
 
   return (
     <header className="bg-[#F7F6F3] text-[#37352F] border-b border-[#EDEDEB] sticky top-0 z-40 shadow-xs">
@@ -62,20 +69,26 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </div>
 
-          {/* Business Dropdown */}
+          {/* Business Dropdown / Display */}
           <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-2 bg-white hover:bg-[#F0EFEA] text-[#37352F] px-3.5 py-1.5 rounded-lg border border-[#EDEDEB] text-sm font-medium transition-all shadow-xs"
-            >
-              <span className="font-semibold text-[#37352F]">{currentBusiness.name}</span>
-              <span className="bg-[#F0EFEA] text-gray-600 text-xs px-2 py-0.5 rounded">
-                {currentBusiness.subscriptionCurrency === 'PKR' ? 'PKR' : 'USD'}
-              </span>
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            </button>
+            {isSuperAdmin ? (
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center space-x-2 bg-white hover:bg-[#F0EFEA] text-[#37352F] px-3.5 py-1.5 rounded-lg border border-[#EDEDEB] text-sm font-medium transition-all shadow-xs"
+              >
+                <span className="font-semibold text-[#37352F]">{currentBusiness.name}</span>
+                <span className="bg-[#F0EFEA] text-gray-600 text-xs px-2 py-0.5 rounded">
+                  {currentBusiness.subscriptionCurrency === 'PKR' ? 'PKR' : 'USD'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+            ) : (
+              <div className="flex items-center space-x-2 bg-white text-[#37352F] px-3.5 py-1.5 rounded-lg border border-[#EDEDEB] text-sm font-medium shadow-xs">
+                <span className="font-semibold text-[#37352F]">{currentBusiness.name}</span>
+              </div>
+            )}
 
-            {dropdownOpen && (
+            {isSuperAdmin && dropdownOpen && (
               <div className="absolute left-0 mt-2 w-64 bg-white border border-[#EDEDEB] rounded-xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
                 <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   Select Salon Tenant
@@ -136,6 +149,13 @@ export const Header: React.FC<HeaderProps> = ({
             <Smartphone className="w-3.5 h-3.5 text-gray-500" />
             <span className="text-gray-700 font-mono text-[11px]">{currentBusiness.phone}</span>
           </div>
+
+          <button
+            onClick={onLogout}
+            className="ml-2 text-xs font-semibold text-gray-500 hover:text-gray-800 transition"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
