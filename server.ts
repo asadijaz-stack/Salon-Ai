@@ -291,20 +291,28 @@ app.post('/api/auth/reset-password', (req, res) => {
 app.get('/api/businesses', verifyToken, async (req: any, res) => {
   if (!db) return res.json(businesses);
   try {
-    const isSuperAdmin = req.user.email?.trim().toLowerCase() === process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+    const userEmail = req.user.email || '';
+    const adminEnv = process.env.SUPER_ADMIN_EMAIL || '';
+    const isSuperAdmin = userEmail.trim().toLowerCase() === adminEnv.trim().toLowerCase();
+    
+    console.log(`[GET /api/businesses] User: ${userEmail}, AdminEnv: ${adminEnv}, isSuperAdmin: ${isSuperAdmin}`);
+    
     let query: any = db.collection('businesses');
 
     // If not super admin, restrict to their own businesses
     if (!isSuperAdmin) {
+      console.log(`[GET /api/businesses] Filtering by ownerUid: ${req.user.uid}`);
       query = query.where('ownerUid', '==', req.user.uid);
     }
 
     const snapshot = await query.get();
+    console.log(`[GET /api/businesses] Query returned ${snapshot.size} documents.`);
+    
     if (snapshot.empty) {
       return res.json([]);
     }
     const results: any[] = [];
-    snapshot.forEach(doc => results.push(doc.data()));
+    snapshot.forEach((doc: any) => results.push(doc.data()));
     res.json(results);
   } catch (error) {
     console.error('Error fetching businesses:', error);
