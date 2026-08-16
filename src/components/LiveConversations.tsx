@@ -62,6 +62,9 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
       setConversations(data);
       if (data.length > 0 && !selectedPhone) {
         setSelectedPhone(data[0].customerPhone);
+      } else if (selectedPhone) {
+        // Fetch new messages for the currently selected chat if they refresh the sidebar
+        fetchMessages(selectedPhone);
       }
     } catch (e) {
       console.error(e);
@@ -98,7 +101,11 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
       const newData = await res.json();
       
       if (newData.length > 0) {
-        setMessages((prev) => [...prev, ...newData]);
+        setMessages((prev) => {
+          const map = new Map(prev.map(m => [m.id, m]));
+          newData.forEach(m => map.set(m.id, m));
+          return Array.from(map.values()).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        });
       }
     } catch (e) {
       console.error(e);
