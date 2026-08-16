@@ -1413,6 +1413,7 @@ async function handleIncomingMessage({
       replyText: "[AI is currently paused for this conversation because the salon owner took over. The message has been routed to the owner's dashboard inbox.]",
       aiPaused: true,
       agentAction: 'owner_takeover_active',
+      wasAlreadyPaused: true,
     };
   }
 
@@ -1749,7 +1750,7 @@ app.post('/api/whatsapp/webhook', (req, res) => {
                   customerName,
                   text,
                 }).then(async (result) => {
-                  if (result.replyText && !result.aiPaused && metaPhoneNumberId) {
+                  if (result.replyText && !result.wasAlreadyPaused && metaPhoneNumberId) {
                     await sendWhatsAppMessage(metaPhoneNumberId, customerPhone, result.replyText);
                   }
                 }).catch((err) => {
