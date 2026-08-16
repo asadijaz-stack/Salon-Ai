@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ShieldAlert,
   ChevronRight,
+  RefreshCcw,
 } from 'lucide-react';
 import { Business, Conversation, Message, Booking } from '../types';
 
@@ -101,10 +102,6 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
   useEffect(() => {
     if (selectedPhone) {
       fetchMessages(selectedPhone);
-      const interval = setInterval(() => {
-        fetchMessages(selectedPhone);
-      }, 30000); // Polling every 30s to save Firebase read quota
-      return () => clearInterval(interval);
     }
   }, [selectedPhone, business.id]);
 
@@ -185,9 +182,18 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
           <div className="p-4 border-b border-[#EDEDEB] bg-[#F7F6F3]">
             <h2 className="text-base font-bold text-[#37352F] flex items-center justify-between">
               <span>WhatsApp Inbox</span>
-              <span className="text-xs bg-[#EBEAE4] text-[#37352F] font-mono px-2 py-0.5 rounded border border-[#EDEDEB]">
-                {conversations.length} Active
-              </span>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={fetchConversations}
+                  className="p-1 hover:bg-[#EBEAE4] rounded transition text-gray-500 hover:text-[#37352F]"
+                  title="Refresh Conversations"
+                >
+                  <RefreshCcw className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-xs bg-[#EBEAE4] text-[#37352F] font-mono px-2 py-0.5 rounded border border-[#EDEDEB]">
+                  {conversations.length} Active
+                </span>
+              </div>
             </h2>
             <div className="mt-3 relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
@@ -281,27 +287,37 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
                   </div>
                 </div>
 
-                {/* AI Toggle Switch */}
-                <button
-                  onClick={handleToggleAI}
-                  className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
-                    activeConv.aiPaused
-                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                      : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                  }`}
-                >
-                  {activeConv.aiPaused ? (
-                    <>
-                      <ToggleLeft className="w-4 h-4 text-amber-600" />
-                      <span>Takeover Active</span>
-                    </>
-                  ) : (
-                    <>
-                      <ToggleRight className="w-4 h-4 text-emerald-600" />
-                      <span>AI Autopilot</span>
-                    </>
-                  )}
-                </button>
+                {/* Refresh and AI Toggle */}
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => fetchMessages(activeConv.customerPhone)}
+                    disabled={loading}
+                    className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-500 hover:text-[#37352F] border border-transparent hover:border-gray-200"
+                    title="Refresh Chat"
+                  >
+                    <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={handleToggleAI}
+                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                      activeConv.aiPaused
+                        ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {activeConv.aiPaused ? (
+                      <>
+                        <ToggleLeft className="w-4 h-4 text-amber-600" />
+                        <span>Takeover Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleRight className="w-4 h-4 text-emerald-600" />
+                        <span>AI Autopilot</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Takeover Warning Banner */}
