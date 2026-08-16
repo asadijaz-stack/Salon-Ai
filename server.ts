@@ -510,18 +510,24 @@ app.post('/api/conversations/toggle-ai', async (req, res) => {
     const docSnap = await docRef.get();
     if (!docSnap.exists) return res.status(404).json({ error: 'Conversation not found' });
 
-    const conv = docSnap.data() as Conversation;
-    conv.aiPaused = !conv.aiPaused;
-    await docRef.update({ aiPaused: conv.aiPaused });
+    const updatedConv = docSnap.data() as Conversation;
+    updatedConv.aiPaused = !updatedConv.aiPaused;
+    await docRef.update({ aiPaused: updatedConv.aiPaused });
+
+    // Sync in-memory cache
+    const memConv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
+    if (memConv) {
+      memConv.aiPaused = updatedConv.aiPaused;
+    }
 
     // Add log
     await db.collection(`businesses/${businessId}/agentLogs`).add({
       id: `log_${Date.now()}`, businessId, timestamp: new Date().toISOString(), conversationId: phone,
-      action: conv.aiPaused ? 'Salon Owner took over chat (AI Paused)' : 'Salon Owner restored AI Agent',
-      reasoning: conv.aiPaused ? 'Owner toggled manual override in dashboard' : 'Owner re-enabled AI receptionist mode',
+      action: updatedConv.aiPaused ? 'Salon Owner took over chat (AI Paused)' : 'Salon Owner restored AI Agent',
+      reasoning: updatedConv.aiPaused ? 'Owner toggled manual override in dashboard' : 'Owner re-enabled AI receptionist mode',
       success: true, toolUsed: 'manual_override'
     });
-    res.json(conv);
+    res.json(updatedConv);
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
