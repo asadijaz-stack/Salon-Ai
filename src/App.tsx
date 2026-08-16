@@ -242,29 +242,47 @@ export default function App() {
         />
 
         <main className="pb-12">
-          {activeTab === 'chats' && <LiveConversations business={currentBusiness!} />}
-          {activeTab === 'simulator' && <WhatsAppTester business={currentBusiness!} />}
-          {activeTab === 'calendar' && <BookingsCalendar business={currentBusiness!} />}
-          {activeTab === 'services' && (
+          <div className={activeTab === 'chats' ? 'block' : 'hidden'}>
+            <LiveConversations business={currentBusiness!} />
+          </div>
+          <div className={activeTab === 'simulator' ? 'block' : 'hidden'}>
+            <WhatsAppTester business={currentBusiness!} />
+          </div>
+          <div className={activeTab === 'calendar' ? 'block' : 'hidden'}>
+            <BookingsCalendar business={currentBusiness!} />
+          </div>
+          <div className={activeTab === 'services' ? 'block' : 'hidden'}>
             <SalonSettings 
               business={currentBusiness!} 
               onUpdateBusiness={handleUpdateBusiness} 
               isSuperAdmin={isSuperAdmin} 
             />
+          </div>
+          <div className={activeTab === 'customers' ? 'block' : 'hidden'}>
+            <CustomersList business={currentBusiness!} />
+          </div>
+          <div className={activeTab === 'logs' ? 'block' : 'hidden'}>
+            <AgentLogs business={currentBusiness!} />
+          </div>
+          {isSuperAdmin && (
+            <div className={activeTab === 'billing' ? 'block' : 'hidden'}>
+              <BillingScreen 
+                business={currentBusiness!} 
+                allBusinesses={businesses}
+                isSuperAdmin={isSuperAdmin}
+                onUpdateBusiness={handleUpdateBusiness}
+                onOpenOnboarding={() => setIsOnboardingOpen(true)}
+              />
+            </div>
           )}
-          {activeTab === 'customers' && <CustomersList business={currentBusiness!} />}
-          {activeTab === 'logs' && <AgentLogs business={currentBusiness!} />}
-          {isSuperAdmin && activeTab === 'billing' && (
-            <BillingScreen 
-              business={currentBusiness!} 
-              allBusinesses={businesses}
-              isSuperAdmin={isSuperAdmin}
-              onUpdateBusiness={handleUpdateBusiness}
-              onOpenOnboarding={() => setIsOnboardingOpen(true)}
-            />
+          <div className={activeTab === 'analytics' ? 'block' : 'hidden'}>
+            <AnalyticsDashboard business={currentBusiness!} />
+          </div>
+          {isSuperAdmin && (
+            <div className={activeTab === 'export' ? 'block' : 'hidden'}>
+              <CloudFunctionCodeExport />
+            </div>
           )}
-          {activeTab === 'analytics' && <AnalyticsDashboard business={currentBusiness!} />}
-          {isSuperAdmin && activeTab === 'export' && <CloudFunctionCodeExport />}
         </main>
       </div>
     );
