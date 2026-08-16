@@ -484,13 +484,17 @@ app.get('/api/conversations', verifyToken, async (req, res) => {
 
 app.post('/api/conversations/messages', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  const { phone } = req.body;
+  const { phone, afterTimestamp } = req.body;
   if (!db) {
     const thread = messages.filter((m) => m.businessId === businessId && m.customerPhone === phone);
     return res.json(thread);
   }
   try {
-    const snapshot = await db.collection(`businesses/${businessId}/conversations/${phone}/messages`).orderBy('timestamp', 'asc').get();
+    let query = db.collection(`businesses/${businessId}/conversations/${phone}/messages`).orderBy('timestamp', 'asc');
+    if (afterTimestamp) {
+      query = query.where('timestamp', '>', afterTimestamp);
+    }
+    const snapshot = await query.get();
     res.json(snapshot.docs.map(d => d.data()));
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });

@@ -83,6 +83,30 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
     }
   };
 
+  const handleRefreshChat = async () => {
+    if (!selectedPhone) return;
+    setLoading(true);
+    try {
+      const lastMsg = messages[messages.length - 1];
+      const afterTimestamp = lastMsg ? lastMsg.timestamp : undefined;
+      
+      const res = await fetch(`/api/conversations/messages?businessId=${business.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: selectedPhone, afterTimestamp }),
+      });
+      const newData = await res.json();
+      
+      if (newData.length > 0) {
+        setMessages((prev) => [...prev, ...newData]);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch bookings
   const fetchBookings = async () => {
     try {
@@ -290,10 +314,10 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
                 {/* Refresh and AI Toggle */}
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => fetchMessages(activeConv.customerPhone)}
+                    onClick={handleRefreshChat}
                     disabled={loading}
                     className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-500 hover:text-[#37352F] border border-transparent hover:border-gray-200"
-                    title="Refresh Chat"
+                    title="Refresh Chat (Fetch New)"
                   >
                     <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   </button>
