@@ -699,7 +699,7 @@ app.put('/api/bookings/:id', async (req, res) => {
       }
     }
 
-    await docRef.update({
+    const updateData: any = {
       customerName,
       customerPhone,
       serviceId,
@@ -707,7 +707,13 @@ app.put('/api/bookings/:id', async (req, res) => {
       startTime: start.toISOString(),
       endTime: endTimeStr,
       notes: notes || ''
-    });
+    };
+    
+    if (req.body.status) {
+      updateData.status = req.body.status;
+    }
+
+    await docRef.update(updateData);
     const updatedSnap = await docRef.get();
     res.json(updatedSnap.data());
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }

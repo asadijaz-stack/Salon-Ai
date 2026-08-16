@@ -40,6 +40,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
   const [stylistId, setStylistId] = useState(business.stylists[0]?.id || '');
   const [bookingTime, setBookingTime] = useState('');
   const [notes, setNotes] = useState('');
+  const [editingBookingStatus, setEditingBookingStatus] = useState<BookingStatus | null>(null);
 
   const fetchBookings = async () => {
     try {
@@ -96,6 +97,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     setBookingTime(localIso);
     
     setNotes(bk.notes || '');
+    setEditingBookingStatus(bk.status);
     setEditingBookingId(bk.id);
     setIsModalOpen(true);
   };
@@ -120,12 +122,14 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
           stylistId: stylistId || business.stylists[0]?.id,
           startTime: new Date(bookingTime).toISOString(),
           notes,
+          ...(editingBookingId && editingBookingStatus ? { status: editingBookingStatus } : {})
         }),
       });
 
       if (res.ok) {
         setIsModalOpen(false);
         setEditingBookingId(null);
+        setEditingBookingStatus(null);
         setCustomerName('');
         setCustomerPhone('');
         setNotes('');
@@ -530,6 +534,22 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
                   className="w-full bg-[#FCFCFB] text-[#37352F] p-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400"
                 />
               </div>
+
+              {editingBookingId && (
+                <div>
+                  <label className="block text-gray-600 font-medium mb-1">Status</label>
+                  <select
+                    value={editingBookingStatus || 'confirmed'}
+                    onChange={(e) => setEditingBookingStatus(e.target.value as BookingStatus)}
+                    className="w-full bg-[#FCFCFB] text-[#37352F] p-2.5 rounded-xl border border-[#EDEDEB] focus:outline-none focus:border-rose-400"
+                  >
+                    <option value="confirmed">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="no_show">No-Show</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-gray-600 font-medium mb-1">Notes / Preferences</label>
