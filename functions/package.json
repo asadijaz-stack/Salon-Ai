@@ -1,0 +1,13 @@
+{
+  "name": "salonai-functions",
+  "description": "Cloud Functions for SalonAI Webhook",
+  "dependencies": {
+    "firebase-admin": "^11.8.0",
+    "firebase-functions": "^4.3.1",
+    "@google/genai": "^2.4.0"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js"
+}

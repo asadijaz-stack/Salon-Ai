@@ -159,6 +159,17 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
     }
   }, [selectedPhone, business.id]);
 
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchConversations();
+      if (selectedPhone) {
+        handleRefreshChat();
+      }
+    }, 30000);
+    return () => clearInterval(intervalId);
+  }, [business.id, selectedPhone, messages]);
+
   const activeConv = conversations.find((c) => c.customerPhone === selectedPhone);
 
   const handleToggleAI = async () => {

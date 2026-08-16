@@ -46,6 +46,14 @@ export const AgentLogs: React.FC<AgentLogsProps> = ({ business }) => {
     fetchLogs();
   }, [business.id]);
 
+  // Auto-refresh logs every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefreshLogs();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [business.id, logs]);
+
   const filtered = logs.filter((log) => {
     const matchSearch =
       log.action.toLowerCase().includes(search.toLowerCase()) ||

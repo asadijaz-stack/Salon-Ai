@@ -24,6 +24,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ business }) => {
     fetchCustomers();
   }, [business.id]);
 
+  // Auto-refresh customers every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchCustomers();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [business.id]);
+
   const filtered = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
