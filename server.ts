@@ -609,12 +609,17 @@ app.post('/api/conversations/send', async (req, res) => {
 // Bookings
 app.get('/api/bookings', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  const afterTimestamp = req.query.afterTimestamp as string;
   if (!db) {
     const filtered = bookings.filter((b) => b.businessId === businessId);
     return res.json(filtered);
   }
   try {
-    const snapshot = await db.collection(`businesses/${businessId}/bookings`).orderBy('createdAt', 'desc').get();
+    let query = db.collection(`businesses/${businessId}/bookings`).orderBy('updatedAt', 'desc');
+    if (afterTimestamp) {
+      query = query.where('updatedAt', '>', afterTimestamp);
+    }
+    const snapshot = await query.get();
     res.json(snapshot.docs.map(d => d.data()));
   } catch (e) {
     console.error('DB Error in /api/bookings:', e);
@@ -639,6 +644,7 @@ app.post('/api/bookings', async (req, res) => {
     endTime: end.toISOString(),
     status: 'confirmed', createdBy: 'owner',
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     notes: notes || '',
   };
 
@@ -675,7 +681,7 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
 
   try {
     const docRef = db.collection(`businesses/${businessId}/bookings`).doc(req.params.id);
-    await docRef.update({ status });
+    await docRef.update({ status, updatedAt: new Date().toISOString() });
     const snap = await docRef.get();
     res.json(snap.data());
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
@@ -728,6 +734,7 @@ app.put('/api/bookings/:id', async (req, res) => {
     if (req.body.status) {
       updateData.status = req.body.status;
     }
+    updateData.updatedAt = new Date().toISOString();
 
     await docRef.update(updateData);
     const updatedSnap = await docRef.get();
@@ -801,12 +808,17 @@ app.get('/api/customers', async (req, res) => {
 // Agent Logs
 app.get('/api/agent-logs', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  const afterTimestamp = req.query.afterTimestamp as string;
   if (!db) {
     const filtered = agentLogs.filter((l) => l.businessId === businessId);
     return res.json(filtered);
   }
   try {
-    const snap = await db.collection(`businesses/${businessId}/agentLogs`).orderBy('timestamp', 'desc').get();
+    let query = db.collection(`businesses/${businessId}/agentLogs`).orderBy('timestamp', 'desc');
+    if (afterTimestamp) {
+      query = query.where('timestamp', '>', afterTimestamp);
+    }
+    const snap = await query.get();
     res.json(snap.docs.map(d => d.data()));
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });

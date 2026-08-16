@@ -58,6 +58,27 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     }
   };
 
+  const handleRefreshBookings = async () => {
+    try {
+      const lastBooking = [...bookings].sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())[0];
+      const afterTimestamp = lastBooking ? (lastBooking.updatedAt || lastBooking.createdAt) : undefined;
+      const url = afterTimestamp ? `/api/bookings?businessId=${business.id}&afterTimestamp=${encodeURIComponent(afterTimestamp)}` : `/api/bookings?businessId=${business.id}`;
+      
+      const res = await fetch(url);
+      const newData = await res.json();
+      
+      if (Array.isArray(newData) && newData.length > 0) {
+        setBookings(prev => {
+          const newMap = new Map(prev.map(b => [b.id, b]));
+          newData.forEach(b => newMap.set(b.id, b));
+          return Array.from(newMap.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        });
+      }
+    } catch (e) {
+      console.error('Error refreshing bookings:', e);
+    }
+  };
+
   useEffect(() => {
     fetchBookings();
   }, [business.id]);
@@ -313,15 +334,22 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-[#37352F]">
-      {/* Header & Controls */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-xl font-bold text-[#37352F] flex items-center space-x-2">
             <Calendar className="w-6 h-6 text-rose-800" />
-            <span>Salon Bookings & Appointments</span>
+            <span>Bookings Calendar</span>
+            <button 
+              onClick={handleRefreshBookings}
+              className="ml-2 p-1 hover:bg-[#EBEAE4] rounded transition text-gray-500 hover:text-[#37352F]"
+              title="Refresh Bookings (Fetch New)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-refresh-ccw"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
+            </button>
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            Real-time schedule for {business.name}. AI booked appointments appear instantly.
+            Manage your salon's appointments. AI-created bookings show a robot icon.
           </p>
         </div>
 

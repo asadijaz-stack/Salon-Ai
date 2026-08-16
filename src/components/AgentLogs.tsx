@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, CheckCircle2, AlertTriangle, Search, Clock, Cpu, Filter, ShieldCheck } from 'lucide-react';
+import { Bot, CheckCircle2, AlertTriangle, Search, Clock, Cpu, Filter, ShieldCheck, RefreshCcw } from 'lucide-react';
 import { Business, AgentLog } from '../types';
 
 interface AgentLogsProps {
@@ -21,10 +21,29 @@ export const AgentLogs: React.FC<AgentLogsProps> = ({ business }) => {
     }
   };
 
+  const handleRefreshLogs = async () => {
+    try {
+      const lastLog = [...logs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+      const afterTimestamp = lastLog ? lastLog.timestamp : undefined;
+      const url = afterTimestamp ? `/api/agent-logs?businessId=${business.id}&afterTimestamp=${encodeURIComponent(afterTimestamp)}` : `/api/agent-logs?businessId=${business.id}`;
+      
+      const res = await fetch(url);
+      const newData = await res.json();
+      
+      if (Array.isArray(newData) && newData.length > 0) {
+        setLogs(prev => {
+          const newMap = new Map(prev.map(l => [l.id, l]));
+          newData.forEach(l => newMap.set(l.id, l));
+          return Array.from(newMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        });
+      }
+    } catch (e) {
+      console.error('Error refreshing logs:', e);
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
-    const interval = setInterval(fetchLogs, 4000); // Live polling
-    return () => clearInterval(interval);
   }, [business.id]);
 
   const filtered = logs.filter((log) => {
@@ -45,6 +64,13 @@ export const AgentLogs: React.FC<AgentLogsProps> = ({ business }) => {
           <h2 className="text-xl font-bold text-[#37352F] flex items-center space-x-2">
             <Bot className="w-6 h-6 text-rose-800" />
             <span>AI Agent Reasoning & Tool Audit Trail</span>
+            <button 
+              onClick={handleRefreshLogs}
+              className="ml-2 p-1 hover:bg-[#EBEAE4] rounded transition text-gray-500 hover:text-[#37352F]"
+              title="Refresh Logs (Fetch New)"
+            >
+              <RefreshCcw className="w-4 h-4" />
+            </button>
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             Complete transparent audit log of every Gemini tool execution, reasoning step, and decision for {business.name}.
