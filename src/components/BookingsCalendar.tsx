@@ -116,11 +116,148 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     }
   };
 
+  const renderBookingCard = (bk: Booking) => {
+    const service = business.services.find((s) => s.id === bk.serviceId);
+    const stylist = business.stylists.find((st) => st.id === bk.stylistId);
+    const isAI = bk.createdBy === 'ai';
+
+    return (
+      <div
+        key={bk.id}
+        className="bg-white border border-[#EDEDEB] hover:border-gray-300 rounded-2xl p-4 shadow-xs transition flex flex-col justify-between"
+      >
+        <div>
+          {/* Top Bar: Service & Status */}
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div>
+              <h3 className="font-bold text-[#37352F] text-sm">
+                {service ? service.name : 'Salon Service'}
+              </h3>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {business.subscriptionCurrency === 'PKR' ? 'PKR' : '$'}{' '}
+                {service ? service.price : 3000} • {service?.durationMinutes || 45} mins
+              </div>
+            </div>
+
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                bk.status === 'confirmed'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : bk.status === 'completed'
+                  ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                  : bk.status === 'no_show'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-red-50 text-red-800 border border-red-200'
+              }`}
+            >
+              {bk.status}
+            </span>
+          </div>
+
+          {/* Customer Info */}
+          <div className="bg-[#F7F6F3] p-3 rounded-xl border border-[#EDEDEB] space-y-1.5 text-xs mb-3">
+            <div className="flex items-center justify-between text-[#37352F] font-semibold">
+              <span className="flex items-center space-x-1.5">
+                <User className="w-3.5 h-3.5 text-gray-400" />
+                <span>{bk.customerName}</span>
+              </span>
+              <span className="text-[10px] text-gray-500 font-mono">{bk.customerPhone}</span>
+            </div>
+
+            <div className="flex items-center justify-between text-gray-600 text-[11px]">
+              <span className="flex items-center space-x-1">
+                <Clock className="w-3 h-3 text-rose-800" />
+                <span>{new Date(bk.startTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+              </span>
+            </div>
+
+            {stylist && (
+              <div className="text-[11px] text-gray-500 flex items-center space-x-1">
+                <Scissors className="w-3 h-3 text-gray-400" />
+                <span>Stylist: <strong className="text-[#37352F]">{stylist.name}</strong></span>
+              </div>
+            )}
+
+            {bk.notes && (
+              <div className="text-[11px] text-gray-500 italic pt-1 border-t border-[#EDEDEB]">
+                "{bk.notes}"
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Actions & Origin */}
+        <div>
+          <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
+            <span className="flex items-center space-x-1">
+              {isAI ? (
+                <>
+                  <Bot className="w-3 h-3 text-rose-800" />
+                  <span className="text-rose-800 font-semibold">Booked via WhatsApp AI</span>
+                </>
+              ) : (
+                <span>Booked Manually</span>
+              )}
+            </span>
+            <div className="flex items-center space-x-2">
+              <span className="font-mono text-gray-400">#{bk.id}</span>
+              <button 
+                onClick={() => handleEditBooking(bk)}
+                className="text-gray-400 hover:text-gray-600 underline"
+              >
+                Edit
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-[#EDEDEB] text-[10px]">
+            <button
+              onClick={() => handleUpdateStatus(bk.id, 'completed')}
+              disabled={bk.status === 'completed'}
+              className="bg-blue-50 hover:bg-blue-100 disabled:opacity-40 text-blue-800 py-1.5 rounded-lg border border-blue-200 font-semibold transition flex items-center justify-center space-x-1"
+            >
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Complete</span>
+            </button>
+
+            <button
+              onClick={() => handleUpdateStatus(bk.id, 'no_show')}
+              disabled={bk.status === 'no_show'}
+              className="bg-amber-50 hover:bg-amber-100 disabled:opacity-40 text-amber-800 py-1.5 rounded-lg border border-amber-200 font-semibold transition flex items-center justify-center space-x-1"
+            >
+              <AlertOctagon className="w-3 h-3" />
+              <span>No-Show</span>
+            </button>
+
+            <button
+              onClick={() => handleUpdateStatus(bk.id, 'cancelled')}
+              disabled={bk.status === 'cancelled'}
+              className="bg-red-50 hover:bg-red-100 disabled:opacity-40 text-red-800 py-1.5 rounded-lg border border-red-200 font-semibold transition flex items-center justify-center space-x-1"
+            >
+              <XCircle className="w-3 h-3" />
+              <span>Cancel</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const filteredBookings = bookings.filter((b) => {
     const matchStylist = selectedStylist === 'all' || b.stylistId === selectedStylist;
     const matchStatus = selectedStatus === 'all' || b.status === selectedStatus;
     return matchStylist && matchStatus;
   });
+
+  const groupedBookings = filteredBookings.reduce((acc, bk) => {
+    const dateStr = new Date(bk.startTime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (!acc[dateStr]) acc[dateStr] = [];
+    acc[dateStr].push(bk);
+    return acc;
+  }, {} as Record<string, Booking[]>);
+
+  const sortedDates = Object.keys(groupedBookings).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-[#37352F]">
@@ -137,6 +274,20 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
         </div>
 
         <div className="flex items-center space-x-3">
+          <div className="bg-gray-100 p-1 rounded-xl flex items-center shadow-inner">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${viewMode === 'list' ? 'bg-white shadow-xs text-rose-800' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              List
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${viewMode === 'calendar' ? 'bg-white shadow-xs text-rose-800' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Day View
+            </button>
+          </div>
           <button
             onClick={() => {
               setEditingBookingId(null);
@@ -198,142 +349,39 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
         </div>
       </div>
 
-      {/* Bookings List View */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredBookings.length === 0 ? (
-          <div className="col-span-full bg-white border border-[#EDEDEB] rounded-2xl p-12 text-center text-gray-400">
-            No bookings found matching selected filters.
-          </div>
-        ) : (
-          filteredBookings.map((bk) => {
-            const service = business.services.find((s) => s.id === bk.serviceId);
-            const stylist = business.stylists.find((st) => st.id === bk.stylistId);
-            const isAI = bk.createdBy === 'ai';
-
-            return (
-              <div
-                key={bk.id}
-                className="bg-white border border-[#EDEDEB] hover:border-gray-300 rounded-2xl p-4 shadow-xs transition flex flex-col justify-between"
-              >
-                <div>
-                  {/* Top Bar: Service & Status */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <h3 className="font-bold text-[#37352F] text-sm">
-                        {service ? service.name : 'Salon Service'}
-                      </h3>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {business.subscriptionCurrency === 'PKR' ? 'PKR' : '$'}{' '}
-                        {service ? service.price : 3000} • {service?.durationMinutes || 45} mins
-                      </div>
-                    </div>
-
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        bk.status === 'confirmed'
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                          : bk.status === 'completed'
-                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                          : bk.status === 'no_show'
-                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                          : 'bg-red-50 text-red-800 border border-red-200'
-                      }`}
-                    >
-                      {bk.status}
-                    </span>
-                  </div>
-
-                  {/* Customer Info */}
-                  <div className="bg-[#F7F6F3] p-3 rounded-xl border border-[#EDEDEB] space-y-1.5 text-xs mb-3">
-                    <div className="flex items-center justify-between text-[#37352F] font-semibold">
-                      <span className="flex items-center space-x-1.5">
-                        <User className="w-3.5 h-3.5 text-gray-400" />
-                        <span>{bk.customerName}</span>
-                      </span>
-                      <span className="text-[10px] text-gray-500 font-mono">{bk.customerPhone}</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-gray-600 text-[11px]">
-                      <span className="flex items-center space-x-1">
-                        <Clock className="w-3 h-3 text-rose-800" />
-                        <span>{new Date(bk.startTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
-                      </span>
-                    </div>
-
-                    {stylist && (
-                      <div className="text-[11px] text-gray-500 flex items-center space-x-1">
-                        <Scissors className="w-3 h-3 text-gray-400" />
-                        <span>Stylist: <strong className="text-[#37352F]">{stylist.name}</strong></span>
-                      </div>
-                    )}
-
-                    {bk.notes && (
-                      <div className="text-[11px] text-gray-500 italic pt-1 border-t border-[#EDEDEB]">
-                        "{bk.notes}"
-                      </div>
-                    )}
-                  </div>
+      {/* Bookings View Mode */}
+      {viewMode === 'list' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredBookings.length === 0 ? (
+            <div className="col-span-full bg-white border border-[#EDEDEB] rounded-2xl p-12 text-center text-gray-400">
+              No bookings found matching selected filters.
+            </div>
+          ) : (
+            filteredBookings.map(renderBookingCard)
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {sortedDates.length === 0 ? (
+            <div className="bg-white border border-[#EDEDEB] rounded-2xl p-12 text-center text-gray-400">
+              No bookings found matching selected filters.
+            </div>
+          ) : (
+            sortedDates.map((date) => (
+              <div key={date} className="bg-white border border-[#EDEDEB] rounded-2xl overflow-hidden shadow-xs">
+                <div className="bg-rose-50 border-b border-[#EDEDEB] px-6 py-3 font-bold text-rose-900 flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-rose-700" />
+                  <span>{date}</span>
+                  <span className="bg-white text-rose-800 text-[10px] px-2 py-0.5 rounded-full ml-2 border border-rose-200 shadow-xs">{groupedBookings[date].length} Bookings</span>
                 </div>
-
-                {/* Footer Actions & Origin */}
-                <div>
-                  <div className="flex items-center justify-between text-[10px] text-gray-500 mb-2">
-                    <span className="flex items-center space-x-1">
-                      {isAI ? (
-                        <>
-                          <Bot className="w-3 h-3 text-rose-800" />
-                          <span className="text-rose-800 font-semibold">Booked via WhatsApp AI</span>
-                        </>
-                      ) : (
-                        <span>Booked Manually</span>
-                      )}
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono text-gray-400">#{bk.id}</span>
-                      <button 
-                        onClick={() => handleEditBooking(bk)}
-                        className="text-gray-400 hover:text-gray-600 underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-[#EDEDEB] text-[10px]">
-                    <button
-                      onClick={() => handleUpdateStatus(bk.id, 'completed')}
-                      disabled={bk.status === 'completed'}
-                      className="bg-blue-50 hover:bg-blue-100 disabled:opacity-40 text-blue-800 py-1.5 rounded-lg border border-blue-200 font-semibold transition flex items-center justify-center space-x-1"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>Complete</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleUpdateStatus(bk.id, 'no_show')}
-                      disabled={bk.status === 'no_show'}
-                      className="bg-amber-50 hover:bg-amber-100 disabled:opacity-40 text-amber-800 py-1.5 rounded-lg border border-amber-200 font-semibold transition flex items-center justify-center space-x-1"
-                    >
-                      <AlertOctagon className="w-3 h-3" />
-                      <span>No-Show</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleUpdateStatus(bk.id, 'cancelled')}
-                      disabled={bk.status === 'cancelled'}
-                      className="bg-red-50 hover:bg-red-100 disabled:opacity-40 text-red-800 py-1.5 rounded-lg border border-red-200 font-semibold transition flex items-center justify-center space-x-1"
-                    >
-                      <XCircle className="w-3 h-3" />
-                      <span>Cancel</span>
-                    </button>
-                  </div>
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groupedBookings[date].map(renderBookingCard)}
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Manual Booking Modal */}
       {isModalOpen && (
