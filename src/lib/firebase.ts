@@ -10,12 +10,13 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-ch
 
 // Default Firebase Configuration (falls back gracefully in preview container)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD-PlaceholderApiKeyForAppCheckValidation",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "salonai-desk.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "salonai-desk",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "salonai-desk.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1029384756",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1029384756:web:abcd1234efgh5678"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCantz7oCDumenksM0TblTcBvgEVDDTbBE",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "salon-ai-v2.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "salon-ai-v2",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "salon-ai-v2.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "634970794398",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:634970794398:web:90081087220040b4f38e8f",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-SMP37J7RHE"
 };
 
 // Initialize or reuse Firebase App
