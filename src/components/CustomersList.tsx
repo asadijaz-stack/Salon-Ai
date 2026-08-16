@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Phone, Calendar, DollarSign, UserCheck } from 'lucide-react';
+import { Users, Search, Phone, Calendar, DollarSign, UserCheck, RefreshCcw } from 'lucide-react';
 import { Business, Customer } from '../types';
 
 interface CustomersListProps {
@@ -37,6 +37,13 @@ export const CustomersList: React.FC<CustomersListProps> = ({ business }) => {
           <h2 className="text-xl font-bold text-[#37352F] flex items-center space-x-2">
             <Users className="w-6 h-6 text-rose-800" />
             <span>Customer Directory</span>
+            <button 
+              onClick={fetchCustomers}
+              className="ml-2 p-1 hover:bg-[#EBEAE4] rounded transition text-gray-500 hover:text-[#37352F]"
+              title="Refresh Customers"
+            >
+              <RefreshCcw className="w-4 h-4" />
+            </button>
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             All WhatsApp clients who have messaged or booked appointments with {business.name}.
