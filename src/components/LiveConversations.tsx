@@ -66,6 +66,7 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
         // Fetch new messages for the currently selected chat if they refresh the sidebar
         fetchMessages(selectedPhone);
       }
+      handleRefreshBookings();
     } catch (e) {
       console.error(e);
     }
@@ -107,6 +108,7 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
           return Array.from(map.values()).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         });
       }
+      handleRefreshBookings();
     } catch (e) {
       console.error(e);
     } finally {
@@ -122,6 +124,27 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
       setBookings(data);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleRefreshBookings = async () => {
+    try {
+      const lastBooking = [...bookings].sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())[0];
+      const afterTimestamp = lastBooking ? (lastBooking.updatedAt || lastBooking.createdAt) : undefined;
+      const url = afterTimestamp ? `/api/bookings?businessId=${business.id}&afterTimestamp=${encodeURIComponent(afterTimestamp)}` : `/api/bookings?businessId=${business.id}`;
+      
+      const res = await fetch(url);
+      const newData = await res.json();
+      
+      if (Array.isArray(newData) && newData.length > 0) {
+        setBookings(prev => {
+          const map = new Map(prev.map(b => [b.id, b]));
+          newData.forEach(b => map.set(b.id, b));
+          return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        });
+      }
+    } catch (e) {
+      console.error('Error refreshing bookings:', e);
     }
   };
 
