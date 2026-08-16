@@ -12,6 +12,9 @@ import {
   Scissors,
   Phone,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Search,
 } from 'lucide-react';
 import { Business, Booking, BookingStatus } from '../types';
 
@@ -24,6 +27,8 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
   const [selectedStylist, setSelectedStylist] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
 
   // New Booking Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -247,7 +252,18 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
   const filteredBookings = bookings.filter((b) => {
     const matchStylist = selectedStylist === 'all' || b.stylistId === selectedStylist;
     const matchStatus = selectedStatus === 'all' || b.status === selectedStatus;
-    return matchStylist && matchStatus;
+    
+    let matchSearch = true;
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      matchSearch = 
+        b.customerName.toLowerCase().includes(q) || 
+        b.customerPhone.toLowerCase().includes(q) || 
+        b.id.toLowerCase().includes(q) ||
+        new Date(b.startTime).toLocaleDateString().includes(q);
+    }
+
+    return matchStylist && matchStatus && matchSearch;
   });
 
   const groupedBookings = filteredBookings.reduce((acc, bk) => {
@@ -258,6 +274,10 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
   }, {} as Record<string, Booking[]>);
 
   const sortedDates = Object.keys(groupedBookings).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  // For Day View (calendar mode)
+  const currentDayStr = calendarDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const currentDayBookings = groupedBookings[currentDayStr] || [];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-[#37352F]">
@@ -306,12 +326,25 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white border border-[#EDEDEB] rounded-2xl p-4 shadow-xs mb-6 flex flex-wrap items-center justify-between gap-4 text-xs">
-        <div className="flex items-center space-x-4">
+      <div className="bg-white border border-[#EDEDEB] rounded-2xl p-4 shadow-xs mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
+        
+        {/* Search */}
+        <div className="flex-1 w-full md:w-auto flex items-center space-x-2 bg-[#FCFCFB] border border-[#EDEDEB] rounded-xl px-3 py-2">
+          <Search className="w-4 h-4 text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Search name, phone, date, or ID..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none focus:outline-none text-[#37352F] w-full"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center space-x-4">
           {/* Stylist Filter */}
           <div className="flex items-center space-x-2">
             <Scissors className="w-4 h-4 text-gray-400" />
-            <label className="text-gray-500 font-medium">Stylist:</label>
+            <label className="text-gray-500 font-medium hidden sm:inline">Stylist:</label>
             <select
               value={selectedStylist}
               onChange={(e) => setSelectedStylist(e.target.value)}
@@ -329,7 +362,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
           {/* Status Filter */}
           <div className="flex items-center space-x-2">
             <Filter className="w-4 h-4 text-gray-400" />
-            <label className="text-gray-500 font-medium">Status:</label>
+            <label className="text-gray-500 font-medium hidden sm:inline">Status:</label>
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
@@ -344,8 +377,8 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
           </div>
         </div>
 
-        <div className="text-gray-500 font-mono">
-          Showing {filteredBookings.length} of {bookings.length} Bookings
+        <div className="text-gray-500 font-mono hidden lg:block">
+          {filteredBookings.length} {filteredBookings.length === 1 ? 'Booking' : 'Bookings'}
         </div>
       </div>
 
@@ -362,23 +395,37 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
         </div>
       ) : (
         <div className="space-y-6">
-          {sortedDates.length === 0 ? (
+          {/* Day View Navigator */}
+          <div className="flex items-center justify-between bg-white border border-[#EDEDEB] rounded-2xl p-4 shadow-xs">
+            <button 
+              onClick={() => setCalendarDate(new Date(calendarDate.getTime() - 86400000))}
+              className="p-2 hover:bg-gray-100 rounded-full transition text-gray-500 hover:text-[#37352F]"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="flex flex-col items-center">
+              <h3 className="text-lg font-bold text-[#37352F] flex items-center space-x-2">
+                <Calendar className="w-5 h-5 text-rose-700" />
+                <span>{currentDayStr}</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">{currentDayBookings.length} {currentDayBookings.length === 1 ? 'Booking' : 'Bookings'} Scheduled</p>
+            </div>
+            <button 
+              onClick={() => setCalendarDate(new Date(calendarDate.getTime() + 86400000))}
+              className="p-2 hover:bg-gray-100 rounded-full transition text-gray-500 hover:text-[#37352F]"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
+          {currentDayBookings.length === 0 ? (
             <div className="bg-white border border-[#EDEDEB] rounded-2xl p-12 text-center text-gray-400">
-              No bookings found matching selected filters.
+              No bookings scheduled for {currentDayStr}.
             </div>
           ) : (
-            sortedDates.map((date) => (
-              <div key={date} className="bg-white border border-[#EDEDEB] rounded-2xl overflow-hidden shadow-xs">
-                <div className="bg-rose-50 border-b border-[#EDEDEB] px-6 py-3 font-bold text-rose-900 flex items-center space-x-2">
-                  <Calendar className="w-5 h-5 text-rose-700" />
-                  <span>{date}</span>
-                  <span className="bg-white text-rose-800 text-[10px] px-2 py-0.5 rounded-full ml-2 border border-rose-200 shadow-xs">{groupedBookings[date].length} Bookings</span>
-                </div>
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {groupedBookings[date].map(renderBookingCard)}
-                </div>
-              </div>
-            ))
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {currentDayBookings.map(renderBookingCard)}
+            </div>
           )}
         </div>
       )}
