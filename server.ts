@@ -1139,6 +1139,7 @@ async function executeTool(
       status: 'confirmed',
       createdBy: 'ai',
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       notes: args.notes || 'Booked via WhatsApp AI Receptionist',
     };
 
@@ -1185,7 +1186,8 @@ async function executeTool(
         try {
           await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
             startTime: bk.startTime,
-            status: bk.status
+            status: bk.status,
+            updatedAt: new Date().toISOString()
           });
         } catch (e) { console.error('Failed to update booking reschedule', e); }
       }
@@ -1220,7 +1222,8 @@ async function executeTool(
       if (db) {
         try {
           await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
-            status: bk.status
+            status: bk.status,
+            updatedAt: new Date().toISOString()
           });
         } catch (e) { console.error('Failed to update booking cancel', e); }
       }
