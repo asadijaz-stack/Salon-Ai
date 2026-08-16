@@ -147,15 +147,13 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
           </p>
         </div>
 
-        {isSuperAdmin && (
-          <button
-            onClick={handleSaveAll}
-            className="bg-[#37352F] hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs flex items-center space-x-2 transition shadow-xs shrink-0"
-          >
-            <Save className="w-4 h-4" />
-            <span>Save All Settings</span>
-          </button>
-        )}
+        <button
+          onClick={handleSaveAll}
+          className="bg-[#37352F] hover:bg-black text-white px-5 py-2.5 rounded-xl font-semibold text-xs flex items-center space-x-2 transition shadow-xs shrink-0"
+        >
+          <Save className="w-4 h-4" />
+          <span>Save All Settings</span>
+        </button>
       </div>
 
       {savedSuccess && (
