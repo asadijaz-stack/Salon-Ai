@@ -292,7 +292,8 @@ app.get('/api/businesses', verifyToken, async (req: any, res) => {
   if (!db) return res.json(businesses);
   try {
     const userEmail = req.user.email || '';
-    const adminEnv = process.env.SUPER_ADMIN_EMAIL || '';
+    const rawAdminEnv = process.env.SUPER_ADMIN_EMAIL || '';
+    const adminEnv = rawAdminEnv.replace(/["']/g, '');
     const isSuperAdmin = userEmail.trim().toLowerCase() === adminEnv.trim().toLowerCase();
     
     console.log(`[GET /api/businesses] User: ${userEmail}, AdminEnv: ${adminEnv}, isSuperAdmin: ${isSuperAdmin}`);
