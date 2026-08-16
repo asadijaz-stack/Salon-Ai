@@ -46,9 +46,15 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     try {
       const res = await fetch(`/api/bookings?businessId=${business.id}`);
       const data = await res.json();
-      setBookings(data);
+      if (Array.isArray(data)) {
+        setBookings(data);
+      } else {
+        console.error('Bookings API returned non-array:', data);
+        setBookings([]);
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching bookings:', e);
+      setBookings([]);
     }
   };
 

@@ -103,7 +103,7 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
       fetchMessages(selectedPhone);
       const interval = setInterval(() => {
         fetchMessages(selectedPhone);
-      }, 3000); // Polling every 3s for live feel
+      }, 30000); // Polling every 30s to save Firebase read quota
       return () => clearInterval(interval);
     }
   }, [selectedPhone, business.id]);

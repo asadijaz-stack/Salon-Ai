@@ -611,7 +611,10 @@ app.get('/api/bookings', async (req, res) => {
   try {
     const snapshot = await db.collection(`businesses/${businessId}/bookings`).orderBy('createdAt', 'desc').get();
     res.json(snapshot.docs.map(d => d.data()));
-  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
+  } catch (e) {
+    console.error('DB Error in /api/bookings:', e);
+    res.status(500).json({ error: 'DB Error', details: String(e) });
+  }
 });
 
 app.post('/api/bookings', async (req, res) => {
