@@ -707,6 +707,23 @@ app.put('/api/bookings/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
+app.delete('/api/bookings/:id', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  if (!db) {
+    const idx = bookings.findIndex((b) => b.id === req.params.id);
+    if (idx !== -1) {
+      bookings.splice(idx, 1);
+      return res.json({ success: true });
+    }
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  try {
+    await db.collection(`businesses/${businessId}/bookings`).doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
+});
+
 // Customers list
 app.get('/api/customers', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';

@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { Business, Booking, BookingStatus } from '../types';
 
@@ -60,6 +61,20 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        fetchBookings();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteBooking = async (id: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this booking?")) return;
+    try {
+      const res = await fetch(`/api/bookings/${id}?businessId=${business.id}`, {
+        method: 'DELETE',
       });
       if (res.ok) {
         fetchBookings();
@@ -211,6 +226,13 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
                 className="text-gray-400 hover:text-gray-600 underline"
               >
                 Edit
+              </button>
+              <button 
+                onClick={() => handleDeleteBooking(bk.id)}
+                className="text-red-400 hover:text-red-600 transition"
+                title="Delete Booking"
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
