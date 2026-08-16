@@ -933,7 +933,7 @@ async function executeTool(
       endOfDay.setHours(closeH, closeM, 0, 0);
 
       // 3. Fetch existing bookings
-      const dayBookings = bookings.filter((b) => {
+      let dayBookings = bookings.filter((b) => {
         if (b.status === 'cancelled') return false;
         if (b.businessId !== biz.id) return false;
         if (matchedStylist && b.stylistId && b.stylistId !== matchedStylist.id) return false;
@@ -941,6 +941,24 @@ async function executeTool(
         const bStart = new Date(b.startTime);
         return bStart.toDateString() === targetDate.toDateString();
       });
+
+      if (db) {
+        try {
+          const snap = await db.collection(`businesses/${biz.id}/bookings`)
+            .where('startTime', '>=', startOfDay.toISOString())
+            .where('startTime', '<=', endOfDay.toISOString())
+            .get();
+          const dbBookings = snap.docs.map(d => d.data() as Booking);
+          // Merge avoiding duplicates
+          for (const dbBk of dbBookings) {
+            if (!dayBookings.find(b => b.id === dbBk.id)) {
+              if (dbBk.status !== 'cancelled' && (!matchedStylist || !dbBk.stylistId || dbBk.stylistId === matchedStylist.id)) {
+                dayBookings.push(dbBk);
+              }
+            }
+          }
+        } catch (e) { console.error('Failed to fetch bookings for availability check', e); }
+      }
 
       // 4. Generate overlapping slots
       const slotDuration = matchedService.durationMinutes;
@@ -1041,7 +1059,20 @@ async function executeTool(
   }
 
   if (name === 'reschedule_booking') {
-    const bk = bookings.find((b) => b.id === args.bookingId || b.customerPhone === customerPhone);
+    let bk = bookings.find((b) => b.id === args.bookingId || b.customerPhone === customerPhone);
+    if (!bk && db) {
+      if (args.bookingId) {
+        const doc = await db.collection(`businesses/${biz.id}/bookings`).doc(args.bookingId).get();
+        if (doc.exists) bk = doc.data() as Booking;
+      }
+      if (!bk) {
+        const snap = await db.collection(`businesses/${biz.id}/bookings`)
+          .where('customerPhone', '==', customerPhone)
+          .where('status', 'in', ['confirmed', 'rescheduled'])
+          .get();
+        if (!snap.empty) bk = snap.docs[0].data() as Booking;
+      }
+    }
     if (bk) {
       bk.startTime = args.newStartTime || new Date(Date.now() + 24 * 3600 * 1000).toISOString();
       bk.status = 'confirmed';
@@ -1065,7 +1096,20 @@ async function executeTool(
   }
 
   if (name === 'cancel_booking') {
-    const bk = bookings.find((b) => b.id === args.bookingId || b.customerPhone === customerPhone);
+    let bk = bookings.find((b) => b.id === args.bookingId || b.customerPhone === customerPhone);
+    if (!bk && db) {
+      if (args.bookingId) {
+        const doc = await db.collection(`businesses/${biz.id}/bookings`).doc(args.bookingId).get();
+        if (doc.exists) bk = doc.data() as Booking;
+      }
+      if (!bk) {
+        const snap = await db.collection(`businesses/${biz.id}/bookings`)
+          .where('customerPhone', '==', customerPhone)
+          .where('status', 'in', ['confirmed', 'rescheduled'])
+          .get();
+        if (!snap.empty) bk = snap.docs[0].data() as Booking;
+      }
+    }
     if (bk) {
       bk.status = 'cancelled';
       if (db) {
@@ -1356,10 +1400,27 @@ async function handleIncomingMessage({
       } catch (e) { console.error('Failed to load context from DB', e); }
     }
 
+    let activeBookingsText = "This customer currently has no active bookings.";
+    if (db) {
+      try {
+        const snap = await db.collection(`businesses/${currentBizId}/bookings`)
+          .where('customerPhone', '==', phone)
+          .where('status', 'in', ['confirmed', 'rescheduled'])
+          .get();
+        if (!snap.empty) {
+          const activeBks = snap.docs.map(d => d.data() as Booking);
+          activeBookingsText = `CURRENT ACTIVE BOOKINGS FOR THIS CUSTOMER:\n` + 
+            activeBks.map(b => `- Booking ID: ${b.id} | Service: ${biz.services.find(s=>s.id === b.serviceId)?.name || b.serviceId} | Time: ${new Date(b.startTime).toLocaleString('en-US')}`).join('\n');
+        }
+      } catch (e) { console.error('Failed to fetch active bookings for prompt', e); }
+    }
+
     const systemInstruction = `
 You are SalonAI, an exceptionally friendly, articulate, professional, and efficient WhatsApp AI receptionist for "${biz.name}".
 
 CURRENT DATE & TIME: ${new Date().toLocaleString()} (Always base availability and bookings relative to this date).
+
+${activeBookingsText}
 
 Salon Details:
 - Name: ${biz.name}
