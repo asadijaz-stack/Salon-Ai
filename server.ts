@@ -27,13 +27,22 @@ const __dirname = path.dirname(__filename);
 let db: Firestore | null = null;
 try {
   const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
+  
+  let serviceAccount;
   if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    console.log('Loaded Firebase Admin credentials from serviceAccountKey.json file.');
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log('Loaded Firebase Admin credentials from FIREBASE_SERVICE_ACCOUNT environment variable.');
+  }
+
+  if (serviceAccount) {
     initializeApp({
       credential: cert(serviceAccount)
     });
     db = getFirestore();
-    console.log('Firebase Admin initialized successfully using serviceAccountKey.json');
+    console.log('Firebase Admin initialized successfully');
 
     // Auto-provision Super Admin Account
     const adminEmail = process.env.SUPER_ADMIN_EMAIL;
@@ -64,7 +73,7 @@ try {
     }
 
   } else {
-    console.warn('serviceAccountKey.json not found! Firestore calls will fail unless initialized otherwise.');
+    console.warn('CRITICAL: No Firebase credentials found! Please add serviceAccountKey.json or set FIREBASE_SERVICE_ACCOUNT env var.');
   }
 } catch (error) {
   console.error('Error initializing Firebase Admin:', error);
@@ -96,7 +105,7 @@ const verifyToken = async (req: any, res: any, next: any) => {
   }
 };
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Initialize Gemini Client (Server-side Secret Handling)
 const getGenAI = () => {
@@ -467,9 +476,9 @@ app.get('/api/conversations', verifyToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.get('/api/conversations/:phone/messages', async (req, res) => {
+app.post('/api/conversations/messages', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  const phone = req.params.phone;
+  const { phone } = req.body;
   if (!db) {
     const thread = messages.filter((m) => m.businessId === businessId && m.customerPhone === phone);
     return res.json(thread);
@@ -480,9 +489,9 @@ app.get('/api/conversations/:phone/messages', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/conversations/:phone/toggle-ai', async (req, res) => {
+app.post('/api/conversations/toggle-ai', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  const phone = req.params.phone;
+  const { phone } = req.body;
 
   if (!db) {
     const conv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
@@ -519,10 +528,9 @@ app.post('/api/conversations/:phone/toggle-ai', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
-app.post('/api/conversations/:phone/send', async (req, res) => {
+app.post('/api/conversations/send', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  const phone = req.params.phone;
-  const { text, isTemplate, templateId } = req.body;
+  const { phone, text, isTemplate, templateId } = req.body;
 
   let finalMessageText = text;
   const now = new Date().toISOString();
