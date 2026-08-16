@@ -1524,10 +1524,16 @@ async function handleIncomingMessage({
       } catch (e) { console.error('Failed to fetch active bookings for prompt', e); }
     }
 
+    const nowPkt = new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' });
     const systemInstruction = `
 You are SalonAI, an exceptionally friendly, articulate, professional, and efficient WhatsApp AI receptionist for "${biz.name}".
 
-CURRENT DATE & TIME: ${new Date().toLocaleString()} (Always base availability and bookings relative to this date).
+CURRENT DATE & TIME (Pakistan Standard Time, UTC+5): ${nowPkt}
+(Always base availability and bookings relative to this date).
+
+IMPORTANT TIMEZONE INSTRUCTION:
+When calling tools that require dates or times (like 'create_booking' or 'reschedule_booking'), you MUST output the time in strict ISO 8601 format including the Pakistan timezone offset (+05:00). 
+Example: If the customer asks for "Tomorrow at 2 PM", you MUST output "YYYY-MM-DDT14:00:00+05:00". Do NOT output 'Z' (UTC) unless you manually subtract 5 hours.
 
 ${activeBookingsText}
 
