@@ -171,8 +171,8 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
 
   const filteredConvs = conversations.filter(
     (c) =>
-      c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.customerPhone.includes(searchQuery)
+      (c.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.customerPhone || '').includes(searchQuery)
   );
 
   const customerBookings = bookings.filter((b) => b.customerPhone === selectedPhone);

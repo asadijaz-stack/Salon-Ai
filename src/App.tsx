@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { Header } from './components/Header';
 import { LiveConversations } from './components/LiveConversations';
 import { WhatsAppTester } from './components/WhatsAppTester';
@@ -28,6 +28,36 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   return originalFetch(input, init);
 };
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4 bg-red-50 text-red-900">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-xl w-full border border-red-200">
+            <h1 className="text-xl font-bold mb-4">Something went wrong</h1>
+            <pre className="text-xs overflow-auto bg-gray-100 p-4 rounded text-gray-800">{this.state.error?.toString()}</pre>
+            <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded">Reload</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const PendingApprovalScreen = ({ onLogout }: { onLogout: () => void }) => (
   <div className="min-h-screen bg-[#FCFCFB] flex flex-col items-center justify-center p-4">
@@ -75,9 +105,14 @@ export default function App() {
     try {
       const res = await fetch('/api/businesses');
       const data = await res.json();
-      setBusinesses(data);
-      if (data.length > 0 && !currentBusiness) {
-        setCurrentBusiness(data[0]);
+      if (Array.isArray(data)) {
+        setBusinesses(data);
+        if (data.length > 0 && !currentBusiness) {
+          setCurrentBusiness(data[0]);
+        }
+      } else {
+        console.error('API returned non-array:', data);
+        setBusinesses([]);
       }
     } catch (e) {
       console.error('Error fetching businesses:', e);
@@ -214,7 +249,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <ErrorBoundary>
       {renderContent()}
       
       <OnboardingModal
@@ -222,6 +257,6 @@ export default function App() {
         onClose={() => setIsOnboardingOpen(false)}
         onBusinessCreated={handleBusinessCreated}
       />
-    </>
+    </ErrorBoundary>
   );
 }

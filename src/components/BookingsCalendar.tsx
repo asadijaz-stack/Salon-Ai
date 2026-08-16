@@ -283,8 +283,8 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
       matchSearch = 
-        b.customerName.toLowerCase().includes(q) || 
-        b.customerPhone.toLowerCase().includes(q) || 
+        (b.customerName || '').toLowerCase().includes(q) || 
+        (b.customerPhone || '').toLowerCase().includes(q) || 
         b.id.toLowerCase().includes(q) ||
         new Date(b.startTime).toLocaleDateString().includes(q);
     }
