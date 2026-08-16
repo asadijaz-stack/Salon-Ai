@@ -27,6 +27,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
 
   // New Booking Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [serviceId, setServiceId] = useState(business.services[0]?.id || '');
@@ -63,13 +64,34 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
     }
   };
 
+  const handleEditBooking = (bk: Booking) => {
+    setCustomerName(bk.customerName);
+    setCustomerPhone(bk.customerPhone);
+    setServiceId(bk.serviceId);
+    setStylistId(bk.stylistId || business.stylists[0]?.id || '');
+    
+    // Format Date for datetime-local input: YYYY-MM-DDTHH:MM
+    const dateObj = new Date(bk.startTime);
+    const localIso = new Date(dateObj.getTime() - (dateObj.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+    setBookingTime(localIso);
+    
+    setNotes(bk.notes || '');
+    setEditingBookingId(bk.id);
+    setIsModalOpen(true);
+  };
+
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !bookingTime) return;
 
     try {
-      const res = await fetch(`/api/bookings?businessId=${business.id}`, {
-        method: 'POST',
+      const url = editingBookingId 
+        ? `/api/bookings/${editingBookingId}?businessId=${business.id}`
+        : `/api/bookings?businessId=${business.id}`;
+      const method = editingBookingId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName,
@@ -83,6 +105,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
 
       if (res.ok) {
         setIsModalOpen(false);
+        setEditingBookingId(null);
         setCustomerName('');
         setCustomerPhone('');
         setNotes('');
@@ -115,7 +138,14 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setEditingBookingId(null);
+              setCustomerName('');
+              setCustomerPhone('');
+              setBookingTime('');
+              setNotes('');
+              setIsModalOpen(true);
+            }}
             className="bg-[#37352F] hover:bg-black text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-2 transition shadow-xs"
           >
             <Plus className="w-4 h-4" />
@@ -258,7 +288,15 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
                         <span>Booked Manually</span>
                       )}
                     </span>
-                    <span className="font-mono text-gray-400">#{bk.id}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-gray-400">#{bk.id}</span>
+                      <button 
+                        onClick={() => handleEditBooking(bk)}
+                        className="text-gray-400 hover:text-gray-600 underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -302,7 +340,7 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-[#EDEDEB] rounded-2xl p-6 max-w-md w-full shadow-xl animate-in fade-in zoom-in-95 text-[#37352F]">
             <h3 className="text-lg font-bold text-[#37352F] mb-4 flex items-center justify-between">
-              <span>Log Manual Booking</span>
+              <span>{editingBookingId ? 'Edit Booking' : 'Log Manual Booking'}</span>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-gray-400 hover:text-[#37352F]"

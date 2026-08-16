@@ -659,6 +659,54 @@ app.patch('/api/bookings/:id/status', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
+app.put('/api/bookings/:id', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  const { customerName, customerPhone, serviceId, stylistId, startTime, notes } = req.body;
+  const start = new Date(startTime);
+  
+  if (!db) {
+    const bk = bookings.find((b) => b.id === req.params.id);
+    if (bk) {
+      bk.customerName = customerName;
+      bk.customerPhone = customerPhone;
+      bk.serviceId = serviceId;
+      bk.stylistId = stylistId;
+      bk.startTime = start.toISOString();
+      bk.notes = notes;
+      return res.json(bk);
+    }
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  try {
+    const docRef = db.collection(`businesses/${businessId}/bookings`).doc(req.params.id);
+    const bkSnap = await docRef.get();
+    if (!bkSnap.exists) return res.status(404).json({ error: 'Booking not found' });
+    
+    let endTimeStr = bkSnap.data()?.endTime;
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    if (bizSnap.exists) {
+      const biz = bizSnap.data() as Business;
+      const service = biz.services.find(s => s.id === serviceId);
+      if (service) {
+        endTimeStr = new Date(start.getTime() + service.durationMinutes * 60 * 1000).toISOString();
+      }
+    }
+
+    await docRef.update({
+      customerName,
+      customerPhone,
+      serviceId,
+      stylistId,
+      startTime: start.toISOString(),
+      endTime: endTimeStr,
+      notes: notes || ''
+    });
+    const updatedSnap = await docRef.get();
+    res.json(updatedSnap.data());
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
+});
+
 // Customers list
 app.get('/api/customers', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
