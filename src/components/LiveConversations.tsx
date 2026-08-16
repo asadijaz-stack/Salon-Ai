@@ -70,7 +70,11 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
   // Fetch messages for selected thread
   const fetchMessages = async (phone: string) => {
     try {
-      const res = await fetch(`/api/conversations/${encodeURIComponent(phone)}/messages?businessId=${business.id}`);
+      const res = await fetch(`/api/conversations/messages?businessId=${business.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
       const data = await res.json();
       setMessages(data);
     } catch (e) {
@@ -109,8 +113,10 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
   const handleToggleAI = async () => {
     if (!selectedPhone) return;
     try {
-      const res = await fetch(`/api/conversations/${encodeURIComponent(selectedPhone)}/toggle-ai?businessId=${business.id}`, {
+      const res = await fetch(`/api/conversations/toggle-ai?businessId=${business.id}`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: selectedPhone }),
       });
       const updated = await res.json();
       setConversations((prev) =>
@@ -128,10 +134,10 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/conversations/${encodeURIComponent(selectedPhone)}/send?businessId=${business.id}`, {
+      const res = await fetch(`/api/conversations/send?businessId=${business.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: inputText }),
+        body: JSON.stringify({ text: inputText, phone: selectedPhone }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -149,10 +155,10 @@ export const LiveConversations: React.FC<LiveConversationsProps> = ({ business }
     if (!activeConv || !selectedTemplate) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/conversations/${activeConv.customerPhone}/send?businessId=${business.id}`, {
+      const res = await fetch(`/api/conversations/send?businessId=${business.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isTemplate: true, templateId: selectedTemplate }),
+        body: JSON.stringify({ isTemplate: true, templateId: selectedTemplate, phone: activeConv.customerPhone }),
       });
       const data = await res.json();
       setMessages((prev) => [...prev, data]);
