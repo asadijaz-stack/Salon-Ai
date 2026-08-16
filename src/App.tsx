@@ -177,7 +177,30 @@ export default function App() {
       );
     }
 
-    if (user && fetchComplete && businesses.length === 0 && !isSuperAdmin) {
+    if (user && fetchComplete && businesses.length === 0) {
+      if (isSuperAdmin) {
+        return (
+          <div className="min-h-screen bg-[#FCFCFB] text-[#37352F] flex flex-col items-center justify-center p-4">
+            <h1 className="text-2xl font-bold mb-4">Super Admin Dashboard</h1>
+            <p className="text-gray-500 mb-8">No salons found in the database. Please onboard a new salon.</p>
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setIsOnboardingOpen(true)}
+                className="bg-rose-800 text-white px-6 py-3 rounded-xl font-medium"
+              >
+                Onboard New Salon
+              </button>
+              <button
+                onClick={handleLogout}
+                className="bg-white border border-[#EDEDEB] hover:bg-gray-50 text-gray-700 px-6 py-3 rounded-xl font-medium"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-[#FCFCFB] text-[#37352F] flex flex-col items-center justify-center p-4">
           <div className="max-w-md w-full bg-white border border-[#EDEDEB] rounded-3xl p-8 shadow-2xl text-center">
@@ -189,7 +212,6 @@ export default function App() {
               We couldn't find a salon linked to this account. Either your registration didn't complete, or your application was rejected.
             </p>
             <div className="flex flex-col space-y-3">
-
               <button
                 onClick={handleLogout}
                 className="w-full bg-white border border-[#EDEDEB] hover:bg-gray-50 text-gray-700 py-3 rounded-xl font-medium transition-colors"

@@ -291,7 +291,7 @@ app.post('/api/auth/reset-password', (req, res) => {
 app.get('/api/businesses', verifyToken, async (req: any, res) => {
   if (!db) return res.json(businesses);
   try {
-    const isSuperAdmin = req.user.email === process.env.SUPER_ADMIN_EMAIL;
+    const isSuperAdmin = req.user.email?.trim().toLowerCase() === process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
     let query: any = db.collection('businesses');
 
     // If not super admin, restrict to their own businesses
