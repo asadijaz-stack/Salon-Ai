@@ -19,7 +19,6 @@ import {
   AnalyticsSummary,
 } from './src/types.js';
 
-
 // Initialize Firebase Admin
 let db: Firestore | null = null;
 try {
@@ -243,12 +242,6 @@ const defaultStylists = [
 ];
 
 // Removed in-memory arrays for main usage, but kept for fallback logic.
-let businesses: Business[] = [];
-let bookings: Booking[] = [];
-let conversations: Conversation[] = [];
-let messages: Message[] = [];
-let agentLogs: AgentLog[] = [];
-let payments: Payment[] = [];
 
 // ==================== REST API ENDPOINTS ====================
 
@@ -417,10 +410,7 @@ app.post('/api/businesses', verifyToken, async (req: any, res) => {
   // If Admin is calling this, create the auth account for the client
   if (isSuperAdmin) {
     if (!password) return res.status(400).json({ error: 'Password is required when admin creates an account' });
-    if (!db) {
-      clientUid = `mock_uid_${Date.now()}`;
-      finalStatus = status || 'trial';
-    } else {
+     else {
       try {
         const newUser = await getAuth().createUser({
           email: ownerEmail.trim(),
@@ -453,11 +443,6 @@ app.post('/api/businesses', verifyToken, async (req: any, res) => {
     createdAt: new Date().toISOString(),
   };
 
-  if (!db) {
-    businesses.unshift(newBiz);
-    return res.status(201).json(newBiz);
-  }
-
   try {
     await db.collection('businesses').doc(newBiz.id).set(newBiz);
     res.status(201).json(newBiz);
@@ -472,10 +457,7 @@ app.get('/api/conversations', verifyToken, async (req, res) => {
   if (!businessId || typeof businessId !== 'string') {
     return res.status(400).json({ error: 'businessId query parameter is required' });
   }
-  if (!db) {
-    const filtered = conversations.filter((c) => c.businessId === businessId);
-    return res.json(filtered);
-  }
+  
   try {
     const snapshot = await db.collection(`businesses/${businessId}/conversations`).get();
     res.json(snapshot.docs.map(d => d.data()));
@@ -485,10 +467,7 @@ app.get('/api/conversations', verifyToken, async (req, res) => {
 app.post('/api/conversations/messages', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { phone, afterTimestamp } = req.body;
-  if (!db) {
-    const thread = messages.filter((m) => m.businessId === businessId && m.customerPhone === phone);
-    return res.json(thread);
-  }
+  
   try {
     let query = db.collection(`businesses/${businessId}/conversations/${phone}/messages`).orderBy('timestamp', 'asc');
     if (afterTimestamp) {
@@ -502,21 +481,6 @@ app.post('/api/conversations/messages', async (req, res) => {
 app.post('/api/conversations/toggle-ai', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { phone } = req.body;
-
-  if (!db) {
-    const conv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
-    if (conv) {
-      conv.aiPaused = !conv.aiPaused;
-      agentLogs.unshift({
-        id: `log_${Date.now()}`, businessId, timestamp: new Date().toISOString(), conversationId: phone,
-        action: conv.aiPaused ? 'Salon Owner took over chat (AI Paused)' : 'Salon Owner restored AI Agent',
-        reasoning: conv.aiPaused ? 'Owner toggled manual override in dashboard' : 'Owner re-enabled AI receptionist mode',
-        success: true, toolUsed: 'manual_override'
-      });
-      return res.json(conv);
-    }
-    return res.status(404).json({ error: 'Conversation not found' });
-  }
 
   try {
     const docRef = db.collection(`businesses/${businessId}/conversations`).doc(phone);
@@ -553,9 +517,7 @@ app.post('/api/conversations/send', async (req, res) => {
 
   // Validate 24-hour window for manual free-form text
   let conv = null;
-  if (!db) {
-    conv = conversations.find((c) => c.businessId === businessId && c.customerPhone === phone);
-  } else {
+   else {
     try {
       const convSnap = await db.collection(`businesses/${businessId}/conversations`).doc(phone).get();
       if (convSnap.exists) conv = convSnap.data() as Conversation;
@@ -593,12 +555,6 @@ app.post('/api/conversations/send', async (req, res) => {
     agentAction: actionStr
   };
 
-  if (!db) {
-    messages.push(newMsg);
-    if (conv) conv.lastMessageAt = now;
-    return res.status(201).json(newMsg);
-  }
-
   try {
     await db.collection(`businesses/${businessId}/conversations/${phone}/messages`).doc(newMsg.id).set(newMsg);
     await db.collection(`businesses/${businessId}/conversations`).doc(phone).update({ lastMessageAt: now });
@@ -610,10 +566,7 @@ app.post('/api/conversations/send', async (req, res) => {
 app.get('/api/bookings', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const afterTimestamp = req.query.afterTimestamp as string;
-  if (!db) {
-    const filtered = bookings.filter((b) => b.businessId === businessId);
-    return res.json(filtered);
-  }
+  
   try {
     let query = db.collection(`businesses/${businessId}/bookings`).orderBy('updatedAt', 'desc');
     if (afterTimestamp) {
@@ -648,11 +601,6 @@ app.post('/api/bookings', async (req, res) => {
     notes: notes || '',
   };
 
-  if (!db) {
-    bookings.unshift(newBooking);
-    return res.status(201).json(newBooking);
-  }
-
   try {
     const bizSnap = await db.collection('businesses').doc(businessId).get();
     if (bizSnap.exists) {
@@ -670,14 +618,6 @@ app.post('/api/bookings', async (req, res) => {
 app.patch('/api/bookings/:id/status', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { status } = req.body;
-  if (!db) {
-    const bk = bookings.find((b) => b.id === req.params.id);
-    if (bk) {
-      bk.status = status;
-      return res.json(bk);
-    }
-    return res.status(404).json({ error: 'Booking not found' });
-  }
 
   try {
     const docRef = db.collection(`businesses/${businessId}/bookings`).doc(req.params.id);
@@ -691,20 +631,6 @@ app.put('/api/bookings/:id', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { customerName, customerPhone, serviceId, stylistId, startTime, notes } = req.body;
   const start = new Date(startTime);
-  
-  if (!db) {
-    const bk = bookings.find((b) => b.id === req.params.id);
-    if (bk) {
-      bk.customerName = customerName;
-      bk.customerPhone = customerPhone;
-      bk.serviceId = serviceId;
-      bk.stylistId = stylistId;
-      bk.startTime = start.toISOString();
-      bk.notes = notes;
-      return res.json(bk);
-    }
-    return res.status(404).json({ error: 'Booking not found' });
-  }
 
   try {
     const docRef = db.collection(`businesses/${businessId}/bookings`).doc(req.params.id);
@@ -744,14 +670,6 @@ app.put('/api/bookings/:id', async (req, res) => {
 
 app.delete('/api/bookings/:id', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  if (!db) {
-    const idx = bookings.findIndex((b) => b.id === req.params.id);
-    if (idx !== -1) {
-      bookings.splice(idx, 1);
-      return res.json({ success: true });
-    }
-    return res.status(404).json({ error: 'Booking not found' });
-  }
 
   try {
     await db.collection(`businesses/${businessId}/bookings`).doc(req.params.id).delete();
@@ -762,23 +680,6 @@ app.delete('/api/bookings/:id', async (req, res) => {
 // Customers list
 app.get('/api/customers', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  if (!db) {
-    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-    const customerMap = new Map<string, Customer>();
-    conversations.filter((c) => c.businessId === businessId).forEach((c) => {
-      customerMap.set(c.customerPhone, { phone: c.customerPhone, name: c.customerName || 'Customer', firstSeenAt: c.lastMessageAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 });
-    });
-    bookings.filter((b) => b.businessId === businessId).forEach((b) => {
-      const service = biz.services.find((s) => s.id === b.serviceId);
-      const price = service ? service.price : 3000;
-      const existing = customerMap.get(b.customerPhone) || { phone: b.customerPhone, name: b.customerName, firstSeenAt: b.createdAt, totalBookings: 0, completedBookings: 0, totalSpent: 0 };
-      existing.totalBookings += 1;
-      if (b.status === 'completed') { existing.completedBookings += 1; existing.totalSpent += price; }
-      if (!existing.lastBookingDate || new Date(b.startTime) > new Date(existing.lastBookingDate)) { existing.lastBookingDate = b.startTime; }
-      customerMap.set(b.customerPhone, existing);
-    });
-    return res.json(Array.from(customerMap.values()));
-  }
 
   try {
     const bizSnap = await db.collection('businesses').doc(businessId).get();
@@ -809,10 +710,7 @@ app.get('/api/customers', async (req, res) => {
 app.get('/api/agent-logs', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const afterTimestamp = req.query.afterTimestamp as string;
-  if (!db) {
-    const filtered = agentLogs.filter((l) => l.businessId === businessId);
-    return res.json(filtered);
-  }
+  
   try {
     let query = db.collection(`businesses/${businessId}/agentLogs`).orderBy('timestamp', 'desc');
     if (afterTimestamp) {
@@ -826,11 +724,7 @@ app.get('/api/agent-logs', async (req, res) => {
 // Billing
 app.get('/api/billing', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  if (!db) {
-    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-    const history = payments.filter((p) => p.businessId === businessId);
-    return res.json({ subscriptionStatus: biz.subscriptionStatus, price: biz.subscriptionPrice, currency: biz.subscriptionCurrency, payments: history });
-  }
+  
   try {
     const bizSnap = await db.collection('businesses').doc(businessId).get();
     const biz = bizSnap.data() as Business;
@@ -844,13 +738,6 @@ app.post('/api/billing/payment', async (req, res) => {
   const { amount, currency, method, periodCovered, notes } = req.body;
   const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 7500, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes || 'Manual subscription payment recorded by salon owner' };
 
-  if (!db) {
-    payments.unshift(newPayment);
-    const biz = businesses.find((b) => b.id === businessId);
-    if (biz) biz.subscriptionStatus = 'active';
-    return res.status(201).json(newPayment);
-  }
-
   try {
     await db.collection(`businesses/${businessId}/payments`).doc(newPayment.id).set(newPayment);
     await db.collection('businesses').doc(businessId).update({ subscriptionStatus: 'active' });
@@ -861,16 +748,6 @@ app.post('/api/billing/payment', async (req, res) => {
 // Analytics
 app.get('/api/analytics', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
-  if (!db) {
-    const biz = businesses.find((b) => b.id === businessId) || businesses[0];
-    const bizBookings = bookings.filter((b) => b.businessId === businessId);
-    const aiBookings = bizBookings.filter((b) => b.createdBy === 'ai').length;
-    const manualBookings = bizBookings.filter((b) => b.createdBy === 'owner').length;
-    const totalRevenue = bizBookings.filter((b) => b.status === 'completed' || b.status === 'confirmed').reduce((sum, b) => {
-      const srv = biz.services.find((s) => s.id === b.serviceId); return sum + (srv ? srv.price : 3000);
-    }, 0);
-    return res.json({ messagesHandledThisMonth: messages.filter((m) => m.businessId === businessId).length, aiBookingsCount: aiBookings, manualBookingsCount: manualBookings, estimatedNoShowsPrevented: Math.round(aiBookings * 0.35), avgResponseTimeSeconds: 2.1, revenueGenerated: totalRevenue });
-  }
 
   try {
     const bizSnap = await db.collection('businesses').doc(businessId).get();
@@ -1047,7 +924,6 @@ async function executeTool(
         return bStart.toDateString() === targetDate.toDateString();
       });
 
-      if (db) {
         try {
           const snap = await db.collection(`businesses/${biz.id}/bookings`)
             .where('startTime', '>=', startOfDay.toISOString())
@@ -1063,7 +939,6 @@ async function executeTool(
             }
           }
         } catch (e) { console.error('Failed to fetch bookings for availability check', e); }
-      }
 
       // 4. Generate overlapping slots
       const slotDuration = matchedService.durationMinutes;
@@ -1144,11 +1019,10 @@ async function executeTool(
     };
 
     bookings.unshift(newBk);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${biz.id}/bookings`).doc(newBk.id).set(newBk);
       } catch (e) { console.error('Failed to save booking', e); }
-    }
 
     return {
       result: {
@@ -1182,7 +1056,7 @@ async function executeTool(
     if (bk) {
       bk.startTime = args.newStartTime || new Date(Date.now() + 24 * 3600 * 1000).toISOString();
       bk.status = 'confirmed';
-      if (db) {
+      
         try {
           await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
             startTime: bk.startTime,
@@ -1190,7 +1064,7 @@ async function executeTool(
             updatedAt: new Date().toISOString()
           });
         } catch (e) { console.error('Failed to update booking reschedule', e); }
-      }
+      
       return {
         result: { status: 'rescheduled', bookingId: bk.id, newStartTime: bk.startTime },
         actionName: 'rescheduled_booking',
@@ -1219,14 +1093,14 @@ async function executeTool(
     }
     if (bk) {
       bk.status = 'cancelled';
-      if (db) {
+      
         try {
           await db.collection(`businesses/${biz.id}/bookings`).doc(bk.id).update({
             status: bk.status,
             updatedAt: new Date().toISOString()
           });
         } catch (e) { console.error('Failed to update booking cancel', e); }
-      }
+      
       return {
         result: { status: 'cancelled', bookingId: bk.id },
         actionName: 'cancelled_booking',
@@ -1242,13 +1116,13 @@ async function executeTool(
     const conv = conversations.find((c) => c.businessId === biz.id && c.customerPhone === customerPhone);
     if (conv) {
       conv.aiPaused = true;
-      if (db) {
+      
         try {
           await db.collection(`businesses/${biz.id}/conversations`).doc(customerPhone).update({
             aiPaused: true
           });
         } catch (e) { console.error('Failed to update aiPaused on escalate', e); }
-      }
+      
     }
     return {
       result: { status: 'escalated', ownerAlerted: true, reason: args.reason },
@@ -1355,11 +1229,11 @@ async function handleIncomingMessage({
       success: false,
     };
     agentLogs.unshift(logItem);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
       } catch (e) { console.error('Failed to save log', e); }
-    }
+    
   }
 
   // 2. Check Rate Limits & Daily Cost Controls
@@ -1381,11 +1255,10 @@ async function handleIncomingMessage({
       success: false,
     };
     agentLogs.unshift(logItem);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
       } catch (e) { console.error('Failed to save log', e); }
-    }
 
     return {
       replyText: rateLimitReply,
@@ -1408,11 +1281,10 @@ async function handleIncomingMessage({
     timestamp: now,
   };
   messages.push(custMsg);
-  if (db) {
+  
     try {
       await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(custMsg.id).set(custMsg);
     } catch (e) { console.error('Failed to save custMsg', e); }
-  }
 
   // Update conversation record timestamp
   if (!conv) {
@@ -1426,22 +1298,22 @@ async function handleIncomingMessage({
       unreadCount: 0,
     };
     conversations.unshift(conv);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/conversations`).doc(phone).set(conv);
       } catch (e) { console.error('Failed to save conv', e); }
-    }
+    
   } else {
     conv.lastMessageAt = now;
     if (name && name !== 'Customer') conv.customerName = name;
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/conversations`).doc(phone).update({ 
           lastMessageAt: now,
           customerName: conv.customerName 
         });
       } catch (e) { console.error('Failed to update conv', e); }
-    }
+    
   }
 
   // Check if owner took over
@@ -1472,11 +1344,10 @@ async function handleIncomingMessage({
       agentAction: 'checked_availability',
     };
     messages.push(agentMsg);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
       } catch (e) { console.error('Failed to save agentMsg (fallback)', e); }
-    }
 
     return {
       replyText: simulatedReply,
@@ -1510,7 +1381,7 @@ async function handleIncomingMessage({
     }
 
     let activeBookingsText = "This customer currently has no active bookings.";
-    if (db) {
+    
       try {
         const snap = await db.collection(`businesses/${currentBizId}/bookings`)
           .where('customerPhone', '==', phone)
@@ -1522,7 +1393,6 @@ async function handleIncomingMessage({
             activeBks.map(b => `- Booking ID: ${b.id} | Service: ${biz.services.find(s=>s.id === b.serviceId)?.name || b.serviceId} | Time: ${new Date(b.startTime).toLocaleString('en-US')}`).join('\n');
         }
       } catch (e) { console.error('Failed to fetch active bookings for prompt', e); }
-    }
 
     const systemInstruction = `
 You are SalonAI, an exceptionally friendly, articulate, professional, and efficient WhatsApp AI receptionist for "${biz.name}".
@@ -1607,11 +1477,10 @@ Your primary duties:
         success: true,
       };
       agentLogs.unshift(logItem);
-      if (db) {
+      
         try {
           await db.collection(`businesses/${currentBizId}/agentLogs`).add(logItem);
         } catch (e) { console.error('Failed to save log', e); }
-      }
 
       // Append function response to contents for the next turn
       currentContents = [
@@ -1667,11 +1536,10 @@ Your primary duties:
       agentAction: lastAction,
     };
     messages.push(agentMsg);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
       } catch (e) { console.error('Failed to save agentMsg', e); }
-    }
 
     return {
       replyText,
@@ -1692,11 +1560,10 @@ Your primary duties:
       agentAction: 'replied_fallback',
     };
     messages.push(agentMsg);
-    if (db) {
+    
       try {
         await db.collection(`businesses/${currentBizId}/conversations/${phone}/messages`).doc(agentMsg.id).set(agentMsg);
       } catch (e) { console.error('Failed to save agentMsg (error fallback)', e); }
-    }
 
     return {
       replyText: fallbackReply,
@@ -1752,7 +1619,7 @@ app.post('/api/whatsapp/webhook', (req, res) => {
             const metaPhoneNumberId = value.metadata?.phone_number_id;
             
             let matchedBiz: Business | undefined;
-            if (db) {
+            
               try {
                 const snapshot = await db.collection('businesses').where('whatsappPhoneNumberId', '==', metaPhoneNumberId).get();
                 if (!snapshot.empty) {
@@ -1761,7 +1628,7 @@ app.post('/api/whatsapp/webhook', (req, res) => {
               } catch (e) {
                 console.error('Error fetching business by WhatsApp ID:', e);
               }
-            } else {
+             else {
               matchedBiz = businesses.find((b) => b.whatsappPhoneNumberId === metaPhoneNumberId) || businesses[0];
             }
 
