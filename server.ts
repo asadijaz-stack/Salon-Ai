@@ -1383,6 +1383,7 @@ Your primary duties:
 4. Reschedule or cancel existing bookings using 'reschedule_booking' or 'cancel_booking'.
 5. If the customer asks for custom discounts, complains, or requests special unapproved packages, use 'escalate_to_owner' to loop in ${biz.ownerName}.
 6. Keep messages warm, concise, and formatted naturally for WhatsApp (use line breaks and emojis where appropriate).
+7. IMPORTANT: If you have already confirmed a time slot with the user and they provided their name to proceed, DO NOT call 'check_availability' again. Immediately use 'create_booking' with the agreed time converted to ISO format.
 `;
 
     // Construct conversation history
@@ -1414,17 +1415,19 @@ Your primary duties:
     });
 
     let lastAction = 'replied';
+    let currentContents = contents;
+    let toolCallCount = 0;
 
-    // Handle function calls if model invoked tools
-    const functionCalls = response.functionCalls;
-    if (functionCalls && functionCalls.length > 0) {
-      const toolCall = functionCalls[0];
+    // Handle function calls if model invoked tools (up to 3 sequential tool calls allowed)
+    while (response.functionCalls && response.functionCalls.length > 0 && toolCallCount < 3) {
+      toolCallCount++;
+      const toolCall = response.functionCalls[0];
       const { result, actionName } = await executeTool(biz, phone, name, toolCall.name, toolCall.args);
       lastAction = actionName;
 
       // Log AI reasoning/action
       const logItem: AgentLog = {
-        id: `log_${Date.now()}`,
+        id: `log_${Date.now()}_${toolCallCount}`,
         businessId: currentBizId,
         timestamp: new Date().toISOString(),
         conversationId: phone,
@@ -1440,9 +1443,9 @@ Your primary duties:
         } catch (e) { console.error('Failed to save log', e); }
       }
 
-      // Second turn: send function response back to Gemini with cost controls
-      const followUpContents = [
-        ...contents,
+      // Append function response to contents for the next turn
+      currentContents = [
+        ...currentContents,
         response.candidates?.[0]?.content,
         {
           role: 'user',
@@ -1452,9 +1455,6 @@ Your primary duties:
                 name: toolCall.name,
                 response: result,
               },
-            },
-            {
-              text: 'Tool execution successful. Please generate your natural language reply to the user now based on these results.',
             }
           ],
         },
@@ -1462,11 +1462,22 @@ Your primary duties:
 
       response = await aiClient.models.generateContent({
         model: 'gemini-3.5-flash-lite',
-        contents: followUpContents,
+        contents: currentContents,
         config: {
           systemInstruction,
           temperature: 0.3,
           maxOutputTokens: 1000,
+          tools: [
+            {
+              functionDeclarations: [
+                checkAvailabilityTool,
+                createBookingTool,
+                rescheduleBookingTool,
+                cancelBookingTool,
+                escalateToOwnerTool,
+              ],
+            },
+          ],
         },
       });
     }
