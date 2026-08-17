@@ -864,13 +864,18 @@ app.post('/api/billing/payment', async (req, res) => {
   if (!db) {
     payments.unshift(newPayment);
     const biz = businesses.find((b) => b.id === businessId);
-    if (biz) biz.subscriptionStatus = 'active';
+    if (biz && biz.subscriptionStatus === 'cancelled') biz.subscriptionStatus = 'pending';
     return res.status(201).json(newPayment);
   }
 
   try {
     await db.collection(`businesses/${businessId}/payments`).doc(newPayment.id).set(newPayment);
-    await db.collection('businesses').doc(businessId).update({ subscriptionStatus: 'active' });
+    
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    if (bizSnap.exists && (bizSnap.data() as Business).subscriptionStatus === 'cancelled') {
+        await db.collection('businesses').doc(businessId).update({ subscriptionStatus: 'pending' });
+    }
+    
     res.status(201).json(newPayment);
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });

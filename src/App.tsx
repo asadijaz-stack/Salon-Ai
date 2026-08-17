@@ -67,8 +67,8 @@ const PendingApprovalScreen = ({ onLogout }: { onLogout: () => void }) => (
       </div>
       <h1 className="text-2xl font-bold text-[#37352F] mb-4">Account Pending Approval</h1>
       <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-        Thank you for registering your salon! You will be hearing from us through an email soon. 
-        Please check your spam folder too.
+        Thank you! If you recently registered or logged a manual payment, our admin team will verify your details shortly. 
+        Once verified, your account will be active and you can access your dashboard. Please check back later.
       </p>
       <button
         onClick={onLogout}
