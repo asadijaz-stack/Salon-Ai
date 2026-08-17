@@ -228,6 +228,29 @@ export default function App() {
       return <PendingApprovalScreen onLogout={handleLogout} />;
     }
 
+    if (currentBusiness && currentBusiness.subscriptionStatus === 'cancelled' && !isSuperAdmin) {
+      return (
+        <div className="min-h-screen bg-[#FCFCFB] text-[#37352F] flex flex-col p-4">
+          <div className="max-w-4xl mx-auto w-full pt-8">
+            <div className="bg-red-50 border border-red-200 text-red-800 p-6 rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-xl font-bold mb-1 flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-red-600"></span>
+                  <span>Account Cancelled</span>
+                </h2>
+                <p className="text-sm text-red-700">Your subscription has been cancelled. To regain access, please log a payment below. Once processed, your account will be reactivated.</p>
+              </div>
+              <button onClick={handleLogout} className="px-5 py-2.5 bg-white hover:bg-red-50 text-red-800 rounded-xl text-sm font-bold border border-red-200 transition-colors shrink-0">Sign Out</button>
+            </div>
+            <BillingScreen 
+              business={currentBusiness} 
+              onUpdateBusiness={handleUpdateBusiness} 
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#FCFCFB] text-[#37352F] font-sans selection:bg-rose-200 selection:text-rose-900">
         <Header

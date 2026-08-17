@@ -52,6 +52,9 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
       const res = await fetch(`/api/billing?businessId=${business.id}`);
       const data = await res.json();
       setBillingInfo(data);
+      if (onUpdateBusiness && data.subscriptionStatus !== business.subscriptionStatus) {
+        onUpdateBusiness({ ...business, subscriptionStatus: data.subscriptionStatus });
+      }
     } catch (e) {
       console.error(e);
     }
