@@ -358,6 +358,7 @@ app.put('/api/business/:id', async (req, res) => {
       return res.status(404).json({ error: 'Business not found' });
     }
 
+    const docData = docSnap.data() as Business;
     const updates: any = {};
     if (name) updates.name = name.trim();
     if (ownerName) updates.ownerName = ownerName.trim();
@@ -369,18 +370,20 @@ app.put('/api/business/:id', async (req, res) => {
     if (stylists) updates.stylists = stylists;
     if (subscriptionStatus) updates.subscriptionStatus = subscriptionStatus;
 
-    await docRef.update(updates);
+    const authUpdates: any = {};
+    if (password) authUpdates.password = password;
+    if (ownerEmail && ownerEmail.trim() !== docData.ownerEmail) authUpdates.email = ownerEmail.trim();
 
-    // If password update is requested (Admin only via UI)
-    if (password && docSnap.data().ownerUid) {
+    if (Object.keys(authUpdates).length > 0 && docData.ownerUid) {
       try {
-        await getAuth().updateUser(docSnap.data().ownerUid, {
-          password: password
-        });
-      } catch (authErr) {
-        console.error('Failed to update auth password:', authErr);
+        await getAuth().updateUser(docData.ownerUid, authUpdates);
+      } catch (authErr: any) {
+        console.error('Failed to update auth credentials:', authErr);
+        return res.status(400).json({ error: 'Failed to update login credentials: ' + authErr.message });
       }
     }
+
+    await docRef.update(updates);
 
     const updatedSnap = await docRef.get();
     res.json(updatedSnap.data());
