@@ -909,12 +909,27 @@ app.delete('/api/billing/payment/:paymentId', async (req, res) => {
   if (!db) {
     const idx = payments.findIndex(p => p.id === paymentId && p.businessId === businessId);
     if (idx > -1) payments.splice(idx, 1);
-    return res.json({ success: true });
+    
+    let updatedStatus;
+    const biz = businesses.find((b) => b.id === businessId);
+    if (biz && biz.subscriptionStatus === 'pending') {
+      biz.subscriptionStatus = 'cancelled';
+      updatedStatus = 'cancelled';
+    }
+    return res.json({ success: true, updatedStatus });
   }
 
   try {
     await db.collection(`businesses/${businessId}/payments`).doc(paymentId).delete();
-    res.json({ success: true });
+    
+    let updatedStatus;
+    const bizSnap = await db.collection('businesses').doc(businessId).get();
+    if (bizSnap.exists && (bizSnap.data() as Business).subscriptionStatus === 'pending') {
+      await db.collection('businesses').doc(businessId).update({ subscriptionStatus: 'cancelled' });
+      updatedStatus = 'cancelled';
+    }
+    
+    res.json({ success: true, updatedStatus });
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 

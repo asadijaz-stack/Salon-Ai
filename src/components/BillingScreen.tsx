@@ -131,7 +131,13 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
     if (!window.confirm("Are you sure you want to delete this payment log?")) return;
     try {
       const res = await fetch(`/api/billing/payment/${paymentId}?businessId=${business.id}`, { method: 'DELETE' });
-      if (res.ok) fetchBilling();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.updatedStatus && onUpdateBusiness) {
+          onUpdateBusiness({ ...business, subscriptionStatus: data.updatedStatus });
+        }
+        fetchBilling();
+      }
     } catch (e) {
       console.error(e);
     }
@@ -189,14 +195,14 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                 controlTab === 'cancelled' ? 'bg-red-500/20 text-red-300' : 'text-gray-400 hover:text-white'
               }`}
             >
-              Cancelled
+              Pending / Cancelled
             </button>
           </div>
           <div className="p-6 space-y-3 min-h-[400px]">
             {allBusinesses
               .filter((biz) => {
                 if (controlTab === 'active_trial') return biz.subscriptionStatus === 'active' || biz.subscriptionStatus === 'trial';
-                if (controlTab === 'cancelled') return biz.subscriptionStatus === 'cancelled';
+                if (controlTab === 'cancelled') return biz.subscriptionStatus === 'cancelled' || biz.subscriptionStatus === 'pending';
                 return false;
               })
               .map((biz) => (
@@ -208,9 +214,10 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                         className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                           biz.subscriptionStatus === 'active'
                             ? 'bg-emerald-500/20 text-emerald-300'
-
                             : biz.subscriptionStatus === 'trial'
                             ? 'bg-blue-500/20 text-blue-300'
+                            : biz.subscriptionStatus === 'pending'
+                            ? 'bg-amber-500/20 text-amber-300'
                             : 'bg-red-500/20 text-red-300'
                         }`}
                       >
@@ -244,6 +251,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                       <option value="trial">Trial</option>
                       <option value="active">Active</option>
                       <option value="cancelled">Cancelled</option>
+                      <option value="pending">Pending</option>
                     </select>
                   </div>
                 </div>
