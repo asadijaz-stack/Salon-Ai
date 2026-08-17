@@ -847,22 +847,25 @@ app.post('/api/billing/payment', async (req, res) => {
   const { amount, currency, method, periodCovered, notes } = req.body;
 
   let bizName = 'salon owner';
+  let ownerName = 'Owner';
   if (!db) {
     const biz = businesses.find((b) => b.id === businessId);
-    if (biz) bizName = biz.name;
+    if (biz) { bizName = biz.name; ownerName = biz.ownerName; }
   } else {
     try {
       const bizSnap = await db.collection('businesses').doc(businessId).get();
       if (bizSnap.exists) {
-        bizName = (bizSnap.data() as Business).name;
+        const data = bizSnap.data() as Business;
+        bizName = data.name;
+        ownerName = data.ownerName;
       }
     } catch (e) {
       console.error('Error fetching business for payment log:', e);
     }
   }
 
-  const defaultNote = `Manual subscription payment recorded by ${bizName}`;
-  const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 1800, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes || defaultNote };
+  const defaultNote = `Manual subscription payment recorded by ${bizName} (${ownerName})`;
+  const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 1800, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes ? `${notes} | Logged for: ${bizName} (${ownerName})` : defaultNote };
 
   if (!db) {
     payments.unshift(newPayment);
