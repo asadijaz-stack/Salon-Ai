@@ -880,6 +880,44 @@ app.post('/api/billing/payment', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'DB Error' }); }
 });
 
+app.put('/api/billing/payment/:paymentId', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  const { paymentId } = req.params;
+  const { amount, method, periodCovered, notes } = req.body;
+
+  if (!db) {
+    const idx = payments.findIndex(p => p.id === paymentId && p.businessId === businessId);
+    if (idx > -1) {
+      payments[idx] = { ...payments[idx], amount: Number(amount), method, periodCovered, notes };
+      return res.json(payments[idx]);
+    }
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  try {
+    const ref = db.collection(`businesses/${businessId}/payments`).doc(paymentId);
+    await ref.update({ amount: Number(amount), method, periodCovered, notes });
+    const snap = await ref.get();
+    res.json(snap.data());
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
+});
+
+app.delete('/api/billing/payment/:paymentId', async (req, res) => {
+  const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
+  const { paymentId } = req.params;
+
+  if (!db) {
+    const idx = payments.findIndex(p => p.id === paymentId && p.businessId === businessId);
+    if (idx > -1) payments.splice(idx, 1);
+    return res.json({ success: true });
+  }
+
+  try {
+    await db.collection(`businesses/${businessId}/payments`).doc(paymentId).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: 'DB Error' }); }
+});
+
 // Analytics
 app.get('/api/analytics', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';

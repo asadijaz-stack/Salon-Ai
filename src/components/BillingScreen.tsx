@@ -9,6 +9,10 @@ import {
   ShieldCheck,
   Building,
   Receipt,
+  Edit,
+  Trash2,
+  X,
+  Save,
 } from 'lucide-react';
 import { Business, Payment } from '../types';
 
@@ -46,6 +50,9 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAccountControlOpen, setIsAccountControlOpen] = useState(false);
   const [controlTab, setControlTab] = useState<'active_trial' | 'cancelled'>('active_trial');
+
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editPaymentData, setEditPaymentData] = useState<Partial<Payment>>({});
 
   const fetchBilling = async () => {
     try {
@@ -96,6 +103,37 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
       console.error(e);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const startEditingPayment = (pay: Payment) => {
+    setEditingPaymentId(pay.id);
+    setEditPaymentData({ amount: pay.amount, method: pay.method, periodCovered: pay.periodCovered, notes: pay.notes });
+  };
+
+  const handleUpdatePayment = async (paymentId: string) => {
+    try {
+      const res = await fetch(`/api/billing/payment/${paymentId}?businessId=${business.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editPaymentData),
+      });
+      if (res.ok) {
+        setEditingPaymentId(null);
+        fetchBilling();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!window.confirm("Are you sure you want to delete this payment log?")) return;
+    try {
+      const res = await fetch(`/api/billing/payment/${paymentId}?businessId=${business.id}`, { method: 'DELETE' });
+      if (res.ok) fetchBilling();
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -371,29 +409,80 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
               billingInfo.payments.map((pay) => (
                 <div
                   key={pay.id}
-                  className="bg-[#F7F6F3] p-4 rounded-2xl border border-[#EDEDEB] flex items-center justify-between text-xs"
+                  className="bg-[#F7F6F3] p-4 rounded-2xl border border-[#EDEDEB] flex flex-col text-xs"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-[#37352F] text-sm">
-                        {pay.currency === 'PKR' ? 'PKR' : '$'} {pay.amount.toLocaleString()}
-                      </span>
-                      <span className="bg-white text-gray-600 font-mono px-2 py-0.5 rounded uppercase text-[10px] border border-[#EDEDEB]">
-                        {pay.method.replace('_', ' ')}
-                      </span>
-                      <span className="text-rose-800 font-mono font-semibold">
-                        Period: {pay.periodCovered}
-                      </span>
+                  {editingPaymentId === pay.id ? (
+                    <div className="space-y-2 w-full">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          value={editPaymentData.amount || ''}
+                          onChange={(e) => setEditPaymentData({ ...editPaymentData, amount: Number(e.target.value) })}
+                          className="bg-white p-2 rounded-lg border border-[#EDEDEB]"
+                          placeholder="Amount"
+                        />
+                        <select
+                          value={editPaymentData.method || ''}
+                          onChange={(e) => setEditPaymentData({ ...editPaymentData, method: e.target.value as any })}
+                          className="bg-white p-2 rounded-lg border border-[#EDEDEB]"
+                        >
+                          <option value="jazzcash">JazzCash</option>
+                          <option value="easypaisa">EasyPaisa</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="other">Other / Cash</option>
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={editPaymentData.periodCovered || ''}
+                          onChange={(e) => setEditPaymentData({ ...editPaymentData, periodCovered: e.target.value })}
+                          className="bg-white p-2 rounded-lg border border-[#EDEDEB]"
+                          placeholder="Period"
+                        />
+                        <input
+                          type="text"
+                          value={editPaymentData.notes || ''}
+                          onChange={(e) => setEditPaymentData({ ...editPaymentData, notes: e.target.value })}
+                          className="bg-white p-2 rounded-lg border border-[#EDEDEB]"
+                          placeholder="Notes"
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2 pt-1">
+                        <button onClick={() => setEditingPaymentId(null)} className="flex items-center space-x-1 text-gray-500 hover:text-gray-700 px-2 py-1"><X className="w-3 h-3" /><span>Cancel</span></button>
+                        <button onClick={() => handleUpdatePayment(pay.id)} className="flex items-center space-x-1 bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1 rounded-lg"><Save className="w-3 h-3" /><span>Save</span></button>
+                      </div>
                     </div>
-
-                    <div className="text-gray-600 text-[11px]">{pay.notes}</div>
-
-                    <div className="text-[10px] text-gray-400 font-mono">
-                      Recorded on {new Date(pay.recordedAt).toLocaleString()}
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-[#37352F] text-sm">
+                            {pay.currency === 'PKR' ? 'PKR' : '$'} {pay.amount.toLocaleString()}
+                          </span>
+                          <span className="bg-white text-gray-600 font-mono px-2 py-0.5 rounded uppercase text-[10px] border border-[#EDEDEB]">
+                            {pay.method.replace('_', ' ')}
+                          </span>
+                          <span className="text-rose-800 font-mono font-semibold">
+                            Period: {pay.periodCovered}
+                          </span>
+                        </div>
+                        <div className="text-gray-600 text-[11px]">{pay.notes}</div>
+                        <div className="text-[10px] text-gray-400 font-mono">
+                          Recorded on {new Date(pay.recordedAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        {isSuperAdmin && (
+                          <div className="flex items-center space-x-2 border-r border-[#EDEDEB] pr-4 mr-2">
+                            <button onClick={() => startEditingPayment(pay)} className="text-gray-400 hover:text-blue-600 p-1 bg-white rounded-lg border border-[#EDEDEB]" title="Edit Payment"><Edit className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeletePayment(pay.id)} className="text-gray-400 hover:text-red-600 p-1 bg-white rounded-lg border border-[#EDEDEB]" title="Delete Payment"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        )}
+                        <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
+                      </div>
                     </div>
-                  </div>
-
-                  <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
+                  )}
                 </div>
               ))
             )}
