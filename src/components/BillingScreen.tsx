@@ -250,9 +250,34 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
               <span className="text-xs text-gray-500">/ month</span>
             </div>
 
-            <p className="text-xs text-gray-600">
+            <p className="text-xs text-gray-600 mb-4">
               Includes unlimited 24/7 WhatsApp AI receptionist messages, full Gemini tool execution, and owner dashboard.
             </p>
+
+            <div className="bg-[#F7F6F3] p-3 rounded-xl border border-[#EDEDEB] text-xs">
+              <div className="font-bold text-[#37352F] mb-2 flex items-center space-x-1.5">
+                <Building className="w-3.5 h-3.5 text-gray-500" />
+                <span>Payment Instructions</span>
+              </div>
+              <div className="space-y-1.5 text-gray-600">
+                <div className="flex">
+                  <span className="font-medium w-24 shrink-0">Bank Name:</span>
+                  <span>UBL</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-24 shrink-0">Account Title:</span>
+                  <span>Muhammad Asad Ijaz</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-24 shrink-0">Account No:</span>
+                  <span className="font-mono bg-white px-1 py-0.5 rounded border border-[#EDEDEB]">1940269143133</span>
+                </div>
+                <div className="flex">
+                  <span className="font-medium w-24 shrink-0">IBAN:</span>
+                  <span className="font-mono bg-white px-1 py-0.5 rounded border border-[#EDEDEB] break-all">PK79UNIL0109000269143133</span>
+                </div>
+              </div>
+            </div>
           </div>
 
 
