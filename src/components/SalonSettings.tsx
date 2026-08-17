@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Clock,
@@ -56,6 +56,18 @@ export const SalonSettings: React.FC<SalonSettingsProps> = ({
   const [hours, setHours] = useState<WeeklyHours>(business.hours);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  useEffect(() => {
+    setName(business.name);
+    setOwnerName(business.ownerName);
+    setOwnerEmail(business.ownerEmail);
+    setPhone(business.phone);
+    setWhatsappPhoneId(business.whatsappPhoneNumberId);
+    setServices(business.services);
+    setStylists(business.stylists);
+    setHours(business.hours);
+    setPassword('');
+  }, [business]);
 
   const handleSaveAll = async () => {
     const updatedBiz: Business = {

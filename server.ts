@@ -446,7 +446,7 @@ app.post('/api/businesses', verifyToken, async (req: any, res) => {
     services: services || defaultServices,
     stylists: stylists || defaultStylists,
     subscriptionStatus: finalStatus,
-    subscriptionPrice: subscriptionCurrency === 'USD' ? 29 : 7500,
+    subscriptionPrice: subscriptionCurrency === 'USD' ? 29 : 1800,
     subscriptionCurrency: subscriptionCurrency || 'PKR',
     requestedPlan: requestedPlan,
     paymentProof: paymentProof,
@@ -842,7 +842,24 @@ app.get('/api/billing', async (req, res) => {
 app.post('/api/billing/payment', async (req, res) => {
   const businessId = (req.query.businessId as string) || 'biz_glamour_lounge';
   const { amount, currency, method, periodCovered, notes } = req.body;
-  const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 7500, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes || 'Manual subscription payment recorded by salon owner' };
+
+  let bizName = 'salon owner';
+  if (!db) {
+    const biz = businesses.find((b) => b.id === businessId);
+    if (biz) bizName = biz.name;
+  } else {
+    try {
+      const bizSnap = await db.collection('businesses').doc(businessId).get();
+      if (bizSnap.exists) {
+        bizName = (bizSnap.data() as Business).name;
+      }
+    } catch (e) {
+      console.error('Error fetching business for payment log:', e);
+    }
+  }
+
+  const defaultNote = `Manual subscription payment recorded by ${bizName}`;
+  const newPayment: Payment = { id: `pay_${Date.now()}`, businessId, amount: Number(amount) || 1800, currency: currency || 'PKR', method: method || 'jazzcash', periodCovered: periodCovered || '2026-08', recordedAt: new Date().toISOString(), notes: notes || defaultNote };
 
   if (!db) {
     payments.unshift(newPayment);

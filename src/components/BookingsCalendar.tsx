@@ -42,6 +42,11 @@ export const BookingsCalendar: React.FC<BookingsCalendarProps> = ({ business }) 
   const [notes, setNotes] = useState('');
   const [editingBookingStatus, setEditingBookingStatus] = useState<BookingStatus | null>(null);
 
+  useEffect(() => {
+    setServiceId(business.services[0]?.id || '');
+    setStylistId(business.stylists[0]?.id || '');
+  }, [business]);
+
   const fetchBookings = async () => {
     try {
       const res = await fetch(`/api/bookings?businessId=${business.id}`);

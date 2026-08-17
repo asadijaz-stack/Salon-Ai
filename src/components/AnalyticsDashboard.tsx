@@ -20,6 +20,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ business
   };
 
   useEffect(() => {
+    setAnalytics(null);
     fetchAnalytics();
   }, [business.id]);
 

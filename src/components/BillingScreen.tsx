@@ -58,8 +58,15 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
   };
 
   useEffect(() => {
+    setBillingInfo({
+      subscriptionStatus: business.subscriptionStatus,
+      price: business.subscriptionPrice,
+      currency: business.subscriptionCurrency,
+      payments: [],
+    });
+    setAmount(business.subscriptionPrice.toString());
     fetchBilling();
-  }, [business.id]);
+  }, [business]);
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
