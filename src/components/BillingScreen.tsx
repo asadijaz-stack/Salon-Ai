@@ -49,7 +49,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAccountControlOpen, setIsAccountControlOpen] = useState(false);
-  const [controlTab, setControlTab] = useState<'active_trial' | 'cancelled'>('active_trial');
+  const [controlTab, setControlTab] = useState<'active_trial' | 'cancelled' | 'pending'>('active_trial');
 
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editPaymentData, setEditPaymentData] = useState<Partial<Payment>>({});
@@ -131,13 +131,7 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
     if (!window.confirm("Are you sure you want to delete this payment log?")) return;
     try {
       const res = await fetch(`/api/billing/payment/${paymentId}?businessId=${business.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.updatedStatus && onUpdateBusiness) {
-          onUpdateBusiness({ ...business, subscriptionStatus: data.updatedStatus });
-        }
-        fetchBilling();
-      }
+      if (res.ok) fetchBilling();
     } catch (e) {
       console.error(e);
     }
@@ -195,14 +189,23 @@ export const BillingScreen: React.FC<BillingScreenProps> = ({
                 controlTab === 'cancelled' ? 'bg-red-500/20 text-red-300' : 'text-gray-400 hover:text-white'
               }`}
             >
-              Pending / Cancelled
+              Cancelled
+            </button>
+            <button
+              onClick={() => setControlTab('pending')}
+              className={`text-sm font-semibold px-4 py-2 rounded-lg transition-colors ${
+                controlTab === 'pending' ? 'bg-amber-500/20 text-amber-300' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Pending
             </button>
           </div>
           <div className="p-6 space-y-3 min-h-[400px]">
             {allBusinesses
               .filter((biz) => {
                 if (controlTab === 'active_trial') return biz.subscriptionStatus === 'active' || biz.subscriptionStatus === 'trial';
-                if (controlTab === 'cancelled') return biz.subscriptionStatus === 'cancelled' || biz.subscriptionStatus === 'pending';
+                if (controlTab === 'cancelled') return biz.subscriptionStatus === 'cancelled';
+                if (controlTab === 'pending') return biz.subscriptionStatus === 'pending';
                 return false;
               })
               .map((biz) => (
